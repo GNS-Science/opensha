@@ -948,32 +948,35 @@ public class ClusterRuptureBuilder {
 
 	@SuppressWarnings("unused")
 	public static void main(String[] args) throws IOException, DocumentException {
-		File rupSetsDir = new File("/home/kevin/OpenSHA/UCERF4/rup_sets");
-		
-		// for UCERF3 fault models
-		FaultModels fm = FaultModels.FM3_1;
-		String fmPrefix = fm.encodeChoiceString().toLowerCase();
-		File distAzCacheFile = new File(rupSetsDir, fmPrefix+"_dist_az_cache.csv");
-		DeformationModels dm = fm.getFilterBasis();
-		ScalingRelationships scale = ScalingRelationships.MEAN_UCERF3;
-		DeformationModelFetcher dmFetch = new DeformationModelFetcher(fm, dm, null, 0.1);
-		List<? extends FaultSection> subSects = dmFetch.getSubSectionList();
-		// END U3
+		//File rupSetsDir = new File("/home/kevin/OpenSHA/UCERF4/rup_sets");
+		File rupSetsDir = new File("./tmp");
+
+//		// for UCERF3 fault models
+//		FaultModels fm = FaultModels.FM3_1;
+//		String fmPrefix = fm.encodeChoiceString().toLowerCase();
+//		File distAzCacheFile = new File(rupSetsDir, fmPrefix+"_dist_az_cache.csv");
+//		DeformationModels dm = fm.getFilterBasis();
+//		ScalingRelationships scale = ScalingRelationships.MEAN_UCERF3;
+//		DeformationModelFetcher dmFetch = new DeformationModelFetcher(fm, dm, null, 0.1);
+//		List<? extends FaultSection> subSects = dmFetch.getSubSectionList();
+//		// END U3
 		
 		// for NZ tests
-//		File xmlFile = new File(rupSetsDir, "DEMO5_SANSTVZ_crustal_opensha.xml");
-//		Document fsDoc = XMLUtils.loadDocument(xmlFile);
-//		Element fsEl = fsDoc.getRootElement().element("FaultModel");
-//		List<FaultSection> sects = FaultSystemIO.fsDataFromXML(fsEl);
-//		System.out.println("Loaded "+sects.size()+" sections");
-//		List<FaultSection> subSects = new ArrayList<>();
-//		for (FaultSection sect : sects)
-//			subSects.addAll(sect.getSubSectionsList(0.5*sect.getOrigDownDipWidth(), subSects.size(), 2));
-//		System.out.println("Built "+subSects.size()+" subsections");
-//		Preconditions.checkState(!subSects.isEmpty());
-//		String fmPrefix = "nz_demo5_crustal";
-//		File distAzCacheFile = new File(rupSetsDir, fmPrefix+"_dist_az_cache.csv");
-//		ScalingRelationships scale = ScalingRelationships.MEAN_UCERF3;
+//		File xmlFile = new File(rupSetsDir, "SANSTVZ2_crustal_opensha.xml");
+		File xmlFile = new File(rupSetsDir, "KAIK2016.xml");
+
+		Document fsDoc = XMLUtils.loadDocument(xmlFile);
+		Element fsEl = fsDoc.getRootElement().element("FaultModel");
+		List<FaultSection> sects = FaultSystemIO.fsDataFromXML(fsEl);
+		System.out.println("Loaded "+sects.size()+" sections");
+		List<FaultSection> subSects = new ArrayList<>();
+		for (FaultSection sect : sects)
+			subSects.addAll(sect.getSubSectionsList(0.5*sect.getOrigDownDipWidth(), subSects.size(), 2));
+		System.out.println("Built "+subSects.size()+" subsections");
+		Preconditions.checkState(!subSects.isEmpty());
+		String fmPrefix = "nz_demo_crustal";
+		File distAzCacheFile = new File(rupSetsDir, fmPrefix+"_dist_az_cache.csv");
+		ScalingRelationships scale = ScalingRelationships.MEAN_UCERF3;
 		// END NZ
 		
 		// NSHM23 tests
@@ -1035,8 +1038,8 @@ public class ClusterRuptureBuilder {
 		int numAzCached = distAzCalc.getNumCachedAzimuths();
 		int numDistCached = distAzCalc.getNumCachedDistances();
 		
-		int threads = Integer.max(1, Integer.min(31, Runtime.getRuntime().availableProcessors()-2));
-//		int threads = 1;
+		//int threads = Integer.max(1, Integer.min(31, Runtime.getRuntime().availableProcessors()-2));
+		int threads = 8;
 		
 		/*
 		 * =============================
