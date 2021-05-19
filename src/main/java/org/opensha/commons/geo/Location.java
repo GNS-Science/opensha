@@ -233,6 +233,7 @@ public class Location implements
 				root.attribute(Location.XML_METADATA_LONGITUDE).getValue());
 		double depth = Double.parseDouble(
 				root.attribute(Location.XML_METADATA_DEPTH).getValue());
+		if(lon < 0) lon += 360;
 		return new Location(lat, lon, depth);
 	}
 
