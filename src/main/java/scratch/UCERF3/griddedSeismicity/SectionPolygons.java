@@ -49,7 +49,7 @@ import scratch.UCERF3.enumTreeBranches.FaultModels;
  * 
  * @version $Id:$
  */
-class SectionPolygons {
+public class SectionPolygons {
 
 	private static boolean log = false;
 	
@@ -440,7 +440,7 @@ class SectionPolygons {
 	/*
 	 * Cleans polygon of empty sub-polys and duplicate vertices
 	 */
-	static Area cleanBorder(Area area) {
+	public static Area cleanBorder(Area area) {
 		// break apart poly into component paths; many qualify
 		List<LocationList> locLists = areaToLocLists(area);
 		// prune 'empty' polygons
