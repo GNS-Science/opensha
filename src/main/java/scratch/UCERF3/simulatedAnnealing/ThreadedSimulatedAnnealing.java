@@ -6,11 +6,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -437,6 +433,15 @@ public class ThreadedSimulatedAnnealing implements SimulatedAnnealing {
 		this.numThreads = numThreads;
 		while (sas.size() > numThreads)
 			sas.remove(sas.size()-1);
+	}
+
+	public void setRandom(Random r) {
+		if (sas.size() == 1) {
+			sas.get(0).setRandom(r);
+		} else {
+			for (SerialSimulatedAnnealing sa : sas)
+				sa.setRandom(new Random(r.nextLong()));
+		}
 	}
 	
 	public void setConstraintRanges(List<ConstraintRange> constraintRanges) {
