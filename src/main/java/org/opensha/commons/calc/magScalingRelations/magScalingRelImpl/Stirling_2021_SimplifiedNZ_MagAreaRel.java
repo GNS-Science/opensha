@@ -23,7 +23,7 @@ import static org.opensha.commons.calc.magScalingRelations.magScalingRelImpl.Sti
 
 
 /**
- * Implements the simplified relations as provided by Mark Striling for the 2022 New Zealand NSHM 
+ * Implements the simplified relations as provided by Mark Stirling for the 2022 New Zealand NSHM
  * 
  * @version 0.0
  */

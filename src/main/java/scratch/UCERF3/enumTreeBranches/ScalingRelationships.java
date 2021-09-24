@@ -9,11 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.opensha.commons.calc.FaultMomentCalc;
-import org.opensha.commons.calc.magScalingRelations.magScalingRelImpl.Ellsworth_B_WG02_MagAreaRel;
-import org.opensha.commons.calc.magScalingRelations.magScalingRelImpl.HanksBakun2002_MagAreaRel;
-import org.opensha.commons.calc.magScalingRelations.magScalingRelImpl.Shaw_2009_ModifiedMagAreaRel;
-import org.opensha.commons.calc.magScalingRelations.magScalingRelImpl.TMG2017CruMagAreaRel;
-import org.opensha.commons.calc.magScalingRelations.magScalingRelImpl.TMG2017SubMagAreaRel;
+import org.opensha.commons.calc.magScalingRelations.magScalingRelImpl.*;
 import org.opensha.commons.data.function.ArbitrarilyDiscretizedFunc;
 import org.opensha.commons.eq.MagUtils;
 import org.opensha.commons.gui.plot.PlotCurveCharacterstics;
@@ -306,6 +302,42 @@ public enum ScalingRelationships implements LogicTreeBranchNode<ScalingRelations
 		public double getRelativeWeight(InversionModels im) {
 			// NZ model, must have zero weight here to not mess with UCERF3
 			return 0d;
+		}
+	},
+
+	STIRLING_2021_SIMPLIFIED_NZ("Simplified relations as provided by Mark Stirling for the 2022 New Zealand NSHM","STIRLING_2021_SIMPLIFIED_NZ"){
+
+		private Stirling_2021_SimplifiedNZ_MagAreaRel stirling = new Stirling_2021_SimplifiedNZ_MagAreaRel();
+
+		@Override
+		public double getAveSlip(double area, double length, double origWidth) {
+			double mag = stirling.getMedianMag(area * 1e-6);
+			double moment = MagUtils.magToMoment(mag);
+			return FaultMomentCalc.getSlip(area, moment);
+		}
+
+		@Override
+		public double getMag(double area, double origWidth) {
+			return stirling.getMedianMag(area * 1e-6);
+		}
+
+		@Override
+		public double getArea(double mag, double origWidth) {
+			return stirling.getMedianArea(mag) * 1e6;
+		}
+
+		@Override
+		public double getRelativeWeight(InversionModels im) {
+			// NZ model, must have zero weight here to not mess with UCERF3
+			return 0;
+		}
+
+		public void setEpistemicBound(String bound){
+			stirling.setEpistemicBound(bound);
+		}
+
+		public void setRegime(String regime){
+			stirling.setRegime(regime);
 		}
 	};
 	
