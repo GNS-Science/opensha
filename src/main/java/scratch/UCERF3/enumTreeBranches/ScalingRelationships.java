@@ -305,25 +305,25 @@ public enum ScalingRelationships implements LogicTreeBranchNode<ScalingRelations
 		}
 	},
 
-	STIRLING_2021_SIMPLIFIED_NZ("Simplified relations as provided by Mark Stirling for the 2022 New Zealand NSHM","STIRLING_2021_SIMPLIFIED_NZ"){
-
-		private Stirling_2021_SimplifiedNZ_MagAreaRel stirling = new Stirling_2021_SimplifiedNZ_MagAreaRel();
+	STIRNZ_INV_UP("STIRNZ_INV_UP","STIRNZ_INV_UP"){
+		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
+				new Stirling_2021_SimplifiedNZ_MagAreaRel("interface", "upper");
 
 		@Override
 		public double getAveSlip(double area, double length, double origWidth) {
-			double mag = stirling.getMedianMag(area * 1e-6);
+			double mag = magAreaRel.getMedianMag(area * 1e-6);
 			double moment = MagUtils.magToMoment(mag);
 			return FaultMomentCalc.getSlip(area, moment);
 		}
 
 		@Override
 		public double getMag(double area, double origWidth) {
-			return stirling.getMedianMag(area * 1e-6);
+			return magAreaRel.getMedianMag(area * 1e-6);
 		}
 
 		@Override
 		public double getArea(double mag, double origWidth) {
-			return stirling.getMedianArea(mag) * 1e6;
+			return magAreaRel.getMedianArea(mag) * 1e6;
 		}
 
 		@Override
@@ -331,13 +331,87 @@ public enum ScalingRelationships implements LogicTreeBranchNode<ScalingRelations
 			// NZ model, must have zero weight here to not mess with UCERF3
 			return 0;
 		}
+	},
+	STIRNZ_INV_LW("STIRNZ_INV_LW","STIRNZ_INV_LW"){
+		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
+				new Stirling_2021_SimplifiedNZ_MagAreaRel("interface", "lower");
 
-		public void setEpistemicBound(String bound){
-			stirling.setEpistemicBound(bound);
+		@Override
+		public double getAveSlip(double area, double length, double origWidth) {
+			double mag = magAreaRel.getMedianMag(area * 1e-6);
+			double moment = MagUtils.magToMoment(mag);
+			return FaultMomentCalc.getSlip(area, moment);
 		}
 
-		public void setRegime(String regime){
-			stirling.setRegime(regime);
+		@Override
+		public double getMag(double area, double origWidth) {
+			return magAreaRel.getMedianMag(area * 1e-6);
+		}
+
+		@Override
+		public double getArea(double mag, double origWidth) {
+			return magAreaRel.getMedianArea(mag) * 1e6;
+		}
+
+		@Override
+		public double getRelativeWeight(InversionModels im) {
+			// NZ model, must have zero weight here to not mess with UCERF3
+			return 0;
+		}
+	},
+	STIRNZ_CRU_UP("STIRNZ_CRU_UP","STIRNZ_CRU_UP"){
+		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
+				new Stirling_2021_SimplifiedNZ_MagAreaRel(0, "crustal", "upper");
+
+		@Override
+		public double getAveSlip(double area, double length, double origWidth) {
+			double mag = magAreaRel.getMedianMag(area * 1e-6);
+			double moment = MagUtils.magToMoment(mag);
+			return FaultMomentCalc.getSlip(area, moment);
+		}
+
+		@Override
+		public double getMag(double area, double origWidth) {
+			return magAreaRel.getMedianMag(area * 1e-6);
+		}
+
+		@Override
+		public double getArea(double mag, double origWidth) {
+			return magAreaRel.getMedianArea(mag) * 1e6;
+		}
+
+		@Override
+		public double getRelativeWeight(InversionModels im) {
+			// NZ model, must have zero weight here to not mess with UCERF3
+			return 0;
+		}
+	},
+
+	STIRNZ_CRU_LW("STIRNZ_CRU_LW","STIRNZ_CRU_LW"){
+		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
+				new Stirling_2021_SimplifiedNZ_MagAreaRel(0, "crustal", "lower");
+
+		@Override
+		public double getAveSlip(double area, double length, double origWidth) {
+			double mag = magAreaRel.getMedianMag(area * 1e-6);
+			double moment = MagUtils.magToMoment(mag);
+			return FaultMomentCalc.getSlip(area, moment);
+		}
+
+		@Override
+		public double getMag(double area, double origWidth) {
+			return magAreaRel.getMedianMag(area * 1e-6);
+		}
+
+		@Override
+		public double getArea(double mag, double origWidth) {
+			return magAreaRel.getMedianArea(mag) * 1e6;
+		}
+
+		@Override
+		public double getRelativeWeight(InversionModels im) {
+			// NZ model, must have zero weight here to not mess with UCERF3
+			return 0;
 		}
 	};
 	

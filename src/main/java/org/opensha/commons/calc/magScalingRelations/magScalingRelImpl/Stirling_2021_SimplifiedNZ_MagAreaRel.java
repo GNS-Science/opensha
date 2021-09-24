@@ -36,22 +36,29 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 	 */
 	protected Stirling_2021_SimplifiedNZ_FaultRegime faultRegime = CRUSTAL;
 	protected Stirling_2021_SimplifiedNZ_FaultRegime faultType = NONE;
-	protected Stirling_2021_SimplifiedNZ_FaultRegime epistemticBound = LOWER;
+	protected Stirling_2021_SimplifiedNZ_FaultRegime epistemicBound = LOWER;
 
 	public Stirling_2021_SimplifiedNZ_MagAreaRel(){
 		super();
 	}
 
-	public Stirling_2021_SimplifiedNZ_MagAreaRel(double initalRake, String initialEpistemticBound){
+	public Stirling_2021_SimplifiedNZ_MagAreaRel(double initalRake, String initialEpistemicBound){
 		super();
 		setRake(initalRake);
-		setEpistemicBound(initialEpistemticBound);
+		setEpistemicBound(initialEpistemicBound);
 	}
 
-	public Stirling_2021_SimplifiedNZ_MagAreaRel(String initialRegime, String initialEpistemticBound){
+	public Stirling_2021_SimplifiedNZ_MagAreaRel(String initialRegime, String initialEpistemicBound){
 		super();
 		setRegime(initialRegime);
-		setEpistemicBound(initialEpistemticBound);
+		setEpistemicBound(initialEpistemicBound);
+	}
+
+	public Stirling_2021_SimplifiedNZ_MagAreaRel(double inititalRake, String initialRegime, String initialEpistemicBound){
+		super();
+		setRake(inititalRake);
+		setRegime(initialRegime);
+		setEpistemicBound(initialEpistemicBound);
 	}
 
 	/* *
@@ -73,7 +80,7 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 	 * @param epistemic Bound
 	 */
 	public void setEpistemicBound(String epistemicBound) {
-		this.epistemticBound = Stirling_2021_SimplifiedNZ_FaultRegime.fromEpistemicBound(epistemicBound);
+		this.epistemicBound = Stirling_2021_SimplifiedNZ_FaultRegime.fromEpistemicBound(epistemicBound);
 	}
 
 	/**
@@ -122,28 +129,28 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 	private double getC4log10A2Mw() {
 		Double rhat = Double.NaN;
 		if (faultRegime == CRUSTAL || faultRegime == NONE) {
-			if (faultType == NONE || epistemticBound == NONE) {
+			if (faultType == NONE || epistemicBound == NONE) {
 				return Double.NaN;
-			} else if (faultType == STRIKE_SLIP && epistemticBound == LOWER) {
+			} else if (faultType == STRIKE_SLIP && epistemicBound == LOWER) {
 				rhat = 3.65;
-			} else if (faultType == STRIKE_SLIP && epistemticBound == UPPER) {
+			} else if (faultType == STRIKE_SLIP && epistemicBound == UPPER) {
 				rhat= 4.30;
-			} else if (faultType == REVERSE_FAULTING && epistemticBound == LOWER) {
+			} else if (faultType == REVERSE_FAULTING && epistemicBound == LOWER) {
 				rhat= 3.95;
-			} else if (faultType ==  REVERSE_FAULTING && epistemticBound == UPPER) {
+			} else if (faultType ==  REVERSE_FAULTING && epistemicBound == UPPER) {
 				rhat= 4.30;
-			} else if (faultType ==  NORMAL_FAULTING && epistemticBound == LOWER) {
+			} else if (faultType ==  NORMAL_FAULTING && epistemicBound == LOWER) {
 				rhat = 3.95;
-			} else if (faultType == NORMAL_FAULTING && epistemticBound == UPPER) {
+			} else if (faultType == NORMAL_FAULTING && epistemicBound == UPPER) {
 				rhat = 4.30;
 			} 
 		}
 		else if (faultRegime == SUBDUCTION_INTERFACE){ 
-			if (epistemticBound == LOWER) {
+			if (epistemicBound == LOWER) {
 				rhat = 3.60;
-			} else if (epistemticBound == UPPER) {
+			} else if (epistemicBound == UPPER) {
 				rhat= 4.10;
-			} else if (epistemticBound == NONE) {
+			} else if (epistemicBound == NONE) {
 				return Double.NaN;
 			}
 		}
@@ -155,6 +162,6 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 	 */
 	public String getName() {
 
-		return NAME + " " + faultType.toString() + " " + faultRegime.toString() + " " + epistemticBound.toString();
+		return NAME + " " + faultType.toString() + " " + faultRegime.toString() + " " + epistemicBound.toString();
 	}
 }
