@@ -305,7 +305,7 @@ public enum ScalingRelationships implements LogicTreeBranchNode<ScalingRelations
 		}
 	},
 
-	STIRNZ_INV_UP("STIRNZ_INV_UP","STIRNZ_INV_UP"){
+	SMPL_NZ_INT_UP("Stirling_2021_Simplified NZ Interface (Upper bound)","SMPL_NZ_INT_UP"){
 		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
 				new Stirling_2021_SimplifiedNZ_MagAreaRel("interface", "upper");
 
@@ -332,7 +332,7 @@ public enum ScalingRelationships implements LogicTreeBranchNode<ScalingRelations
 			return 0;
 		}
 	},
-	STIRNZ_INV_LW("STIRNZ_INV_LW","STIRNZ_INV_LW"){
+	SMPL_NZ_INT_LW("Stirling_2021_Simplified NZ Interface (Lower bound)","SMPL_NZ_INT_LW"){
 		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
 				new Stirling_2021_SimplifiedNZ_MagAreaRel("interface", "lower");
 
@@ -359,7 +359,7 @@ public enum ScalingRelationships implements LogicTreeBranchNode<ScalingRelations
 			return 0;
 		}
 	},
-	STIRNZ_CRU_UP("STIRNZ_CRU_UP","STIRNZ_CRU_UP"){
+	SMPL_NZ_CRU_UP("Stirling_2021_Simplified NZ Crustal (Upper bound)","SMPL_NZ_CRU_UP"){
 		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
 				new Stirling_2021_SimplifiedNZ_MagAreaRel(0, "crustal", "upper");
 
@@ -387,7 +387,7 @@ public enum ScalingRelationships implements LogicTreeBranchNode<ScalingRelations
 		}
 	},
 
-	STIRNZ_CRU_LW("STIRNZ_CRU_LW","STIRNZ_CRU_LW"){
+	SMPL_NZ_CRU_LW("Stirling_2021_Simplified NZ Crustal (Lower bound)","SMPL_NZ_CRU_LW"){
 		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
 				new Stirling_2021_SimplifiedNZ_MagAreaRel(0, "crustal", "lower");
 
