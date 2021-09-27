@@ -13,6 +13,7 @@ public enum Stirling_2021_SimplifiedNZ_FaultRegime {
 	SUBDUCTION_INTERFACE,
 	CRUSTAL,
 	LOWER,
+	MEAN,
 	UPPER,
 	NONE;
    
@@ -39,8 +40,10 @@ public enum Stirling_2021_SimplifiedNZ_FaultRegime {
     public static Stirling_2021_SimplifiedNZ_FaultRegime fromEpistemicBound(String epistemicBound) {
     	if (epistemicBound.compareToIgnoreCase("lower")==0){
     		return LOWER;
-    	} else if (epistemicBound.compareToIgnoreCase("upper")==0) {
-    		return UPPER;
+		} else if (epistemicBound.compareToIgnoreCase("upper")==0) {
+			return UPPER;
+    	} else if (epistemicBound.compareToIgnoreCase("mean")==0) {
+			return MEAN;
     	} else {
     		return NONE;
     	}

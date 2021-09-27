@@ -332,6 +332,35 @@ public enum ScalingRelationships implements LogicTreeBranchNode<ScalingRelations
 			return 0;
 		}
 	},
+	
+	SMPL_NZ_INT_MN("Stirling_2021_Simplified NZ Interface (Mean bound)","SMPL_NZ_INT_MN"){
+		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
+				new Stirling_2021_SimplifiedNZ_MagAreaRel("interface", "mean");
+
+		@Override
+		public double getAveSlip(double area, double length, double origWidth) {
+			double mag = magAreaRel.getMedianMag(area * 1e-6);
+			double moment = MagUtils.magToMoment(mag);
+			return FaultMomentCalc.getSlip(area, moment);
+		}
+
+		@Override
+		public double getMag(double area, double origWidth) {
+			return magAreaRel.getMedianMag(area * 1e-6);
+		}
+
+		@Override
+		public double getArea(double mag, double origWidth) {
+			return magAreaRel.getMedianArea(mag) * 1e6;
+		}
+
+		@Override
+		public double getRelativeWeight(InversionModels im) {
+			// NZ model, must have zero weight here to not mess with UCERF3
+			return 0;
+		}
+	},
+
 	SMPL_NZ_INT_LW("Stirling_2021_Simplified NZ Interface (Lower bound)","SMPL_NZ_INT_LW"){
 		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
 				new Stirling_2021_SimplifiedNZ_MagAreaRel("interface", "lower");
@@ -359,9 +388,38 @@ public enum ScalingRelationships implements LogicTreeBranchNode<ScalingRelations
 			return 0;
 		}
 	},
+
 	SMPL_NZ_CRU_UP("Stirling_2021_Simplified NZ Crustal (Upper bound)","SMPL_NZ_CRU_UP"){
 		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
 				new Stirling_2021_SimplifiedNZ_MagAreaRel(0, "crustal", "upper");
+
+		@Override
+		public double getAveSlip(double area, double length, double origWidth) {
+			double mag = magAreaRel.getMedianMag(area * 1e-6);
+			double moment = MagUtils.magToMoment(mag);
+			return FaultMomentCalc.getSlip(area, moment);
+		}
+
+		@Override
+		public double getMag(double area, double origWidth) {
+			return magAreaRel.getMedianMag(area * 1e-6);
+		}
+
+		@Override
+		public double getArea(double mag, double origWidth) {
+			return magAreaRel.getMedianArea(mag) * 1e6;
+		}
+
+		@Override
+		public double getRelativeWeight(InversionModels im) {
+			// NZ model, must have zero weight here to not mess with UCERF3
+			return 0;
+		}
+	},
+
+	SMPL_NZ_CRU_MN("Stirling_2021_Simplified NZ Crustal (Mean bound)","SMPL_NZ_CRU_MN"){
+		Stirling_2021_SimplifiedNZ_MagAreaRel magAreaRel =
+				new Stirling_2021_SimplifiedNZ_MagAreaRel(0, "crustal", "mean");
 
 		@Override
 		public double getAveSlip(double area, double length, double origWidth) {

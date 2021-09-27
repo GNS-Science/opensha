@@ -36,7 +36,7 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 	 */
 	protected Stirling_2021_SimplifiedNZ_FaultRegime faultRegime = CRUSTAL;
 	protected Stirling_2021_SimplifiedNZ_FaultRegime faultType = NONE;
-	protected Stirling_2021_SimplifiedNZ_FaultRegime epistemicBound = LOWER;
+	protected Stirling_2021_SimplifiedNZ_FaultRegime epistemicBound = MEAN;
 
 	public Stirling_2021_SimplifiedNZ_MagAreaRel(){
 		super();
@@ -127,26 +127,36 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 	 */
 
 	private double getC4log10A2Mw() {
+
+		//rhat AKA cValue => perhaps, we refactor rhat as cvalue
 		Double rhat = Double.NaN;
 		if (faultRegime == CRUSTAL || faultRegime == NONE) {
 			if (faultType == NONE || epistemicBound == NONE) {
 				return Double.NaN;
+			} else if (faultType == STRIKE_SLIP && epistemicBound == MEAN) {
+				rhat = 4.0;
 			} else if (faultType == STRIKE_SLIP && epistemicBound == LOWER) {
 				rhat = 3.65;
 			} else if (faultType == STRIKE_SLIP && epistemicBound == UPPER) {
 				rhat= 4.30;
-			} else if (faultType == REVERSE_FAULTING && epistemicBound == LOWER) {
+			} else if (faultType == REVERSE_FAULTING && epistemicBound == MEAN) {
+				rhat = 4.1;
+			}	else if (faultType == REVERSE_FAULTING && epistemicBound == LOWER) {
 				rhat= 3.95;
 			} else if (faultType ==  REVERSE_FAULTING && epistemicBound == UPPER) {
 				rhat= 4.30;
+			} else if (faultType ==  NORMAL_FAULTING && epistemicBound == MEAN) {
+				rhat = 4.1;
 			} else if (faultType ==  NORMAL_FAULTING && epistemicBound == LOWER) {
 				rhat = 3.95;
 			} else if (faultType == NORMAL_FAULTING && epistemicBound == UPPER) {
 				rhat = 4.30;
-			} 
+			}
 		}
-		else if (faultRegime == SUBDUCTION_INTERFACE){ 
-			if (epistemicBound == LOWER) {
+		else if (faultRegime == SUBDUCTION_INTERFACE){
+			if (epistemicBound == MEAN) {
+				rhat = 3.85;
+			} else if (epistemicBound == LOWER) {
 				rhat = 3.60;
 			} else if (epistemicBound == UPPER) {
 				rhat= 4.10;
