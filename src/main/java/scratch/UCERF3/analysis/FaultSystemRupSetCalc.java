@@ -1106,19 +1106,19 @@ public class FaultSystemRupSetCalc {
 		
 		// create a temp GR with on-fault rate
 		GutenbergRichterMagFreqDist tempOnFaultGR = new GutenbergRichterMagFreqDist(totalTargetGR.getMinX(), totalTargetGR.size(), 
-				totalTargetGR.getDelta(), totalTargetGR.getMagLower(), totalTargetGR.getMagUpper(), 1.0, 1.0);
+				totalTargetGR.getDelta(), totalTargetGR.getMagLower(), totalTargetGR.getMagUpper(), 1.0, 1.0); //TODO: bValue = NZSHM22 bValue
 		tempOnFaultGR.scaleToCumRate(5.05, totOnFaultMgt5_Rate*onCorr);
 
 		// create a temp GR with off-fault rate
 		GutenbergRichterMagFreqDist tempOffFaultGR = new GutenbergRichterMagFreqDist(totalTargetGR.getMinX(), totalTargetGR.size(), 
-				totalTargetGR.getDelta(), totalTargetGR.getMagLower(), totalTargetGR.getMagUpper(), 1.0, 1.0);
+				totalTargetGR.getDelta(), totalTargetGR.getMagLower(), totalTargetGR.getMagUpper(), 1.0, 1.0);		
 		tempOffFaultGR.scaleToCumRate(5.05, offFaultMgt5_Rate*offCorr);
 
 		// now create the desired MFDs
-		IncrementalMagFreqDist onFaultMFD = new IncrementalMagFreqDist(totalTargetGR.getMinX(), totalTargetGR.size(), totalTargetGR.getDelta());		
+		// IncrementalMagFreqDist onFaultMFD = new IncrementalMagFreqDist(totalTargetGR.getMinX(), totalTargetGR.size(), totalTargetGR.getDelta());		
 		IncrementalMagFreqDist offFaultMFD = new IncrementalMagFreqDist(totalTargetGR.getMinX(), totalTargetGR.size(), totalTargetGR.getDelta());		
 		for(int i=0; i<mMinSeismoOnFaultIndex;i++) {
-			onFaultMFD.set(i,tempOnFaultGR.getY(i));
+			// onFaultMFD.set(i,tempOnFaultGR.getY(i));
 			offFaultMFD.set(i,tempOffFaultGR.getY(i));
 		}
 		for(int i=mMinSeismoOnFaultIndex; i<=mMaxOffFaultIndex+1; i++) {
@@ -1132,18 +1132,20 @@ public class FaultSystemRupSetCalc {
 //			offFaultMFD.set(i,tempOffFaultGR.getY(i)*wtOnFaultRate);
 //			onFaultMFD.set(i,totalTargetGR.getY(i)-offFaultMFD.getY(i));
 			// way 3
+		
+			//TODO: Matt review onFltRate scales from 100% onFault at mMinSeismoOnFaultIndex to 100% totalTarget at mMaxOffFaultIndex
 			double onFltRate = Math.pow(10,wtOnFaultRate*Math.log10(tempOnFaultGR.getY(i)) + wtOnTotRate*Math.log10(totalTargetGR.getY(i)));
-			onFaultMFD.set(i,onFltRate);
+			// onFaultMFD.set(i,onFltRate);
 			offFaultMFD.set(i,totalTargetGR.getY(i)-onFltRate);
 			if(offFaultMFD.getY(i) < 0 ) offFaultMFD.set(i,0); // numerical precision issue at last point if mMaxOffFault = totalTargetGR.getMagUpper()
 		}
 		for(int i=mMaxOffFaultIndex+1; i<totalTargetGR.size(); i++) {
-			onFaultMFD.set(i,totalTargetGR.getY(i));
+			// onFaultMFD.set(i,totalTargetGR.getY(i));
 			offFaultMFD.set(i,0);
 		}
 
-		onFaultMFD.setName("onFaultMFD");
-		onFaultMFD.setInfo("(rate(M>=5)="+(float)onFaultMFD.getCumRate(5.05)+"; totMoRate="+onFaultMFD.getTotalMomentRate()+")");
+//		onFaultMFD.setName("onFaultMFD");
+//		onFaultMFD.setInfo("(rate(M>=5)="+(float)onFaultMFD.getCumRate(5.05)+"; totMoRate="+onFaultMFD.getTotalMomentRate()+")");
 		offFaultMFD.setName("offFaultMFD");
 		offFaultMFD.setInfo("(rate(M>=5)="+(float)offFaultMFD.getCumRate(5.05)+"; totMoRate="+offFaultMFD.getTotalMomentRate()+")");
 		
@@ -1331,7 +1333,7 @@ public class FaultSystemRupSetCalc {
 //	System.out.println("PROBLEM SubSesMmax=\t"+mMax+"\tMinSeismoRupMag=\t"
 //			+invRupSet.getFinalMinMagForSection(s)+"\t"+invRupSet.getFaultSectionData(s).getName());
 			GutenbergRichterMagFreqDist tempOnFaultGR = new GutenbergRichterMagFreqDist(totalTargetGR.getMinX(), totalTargetGR.size(), 
-					totalTargetGR.getDelta(), totalTargetGR.getMagLower(), mMax, 1.0, 1.0);
+					totalTargetGR.getDelta(), totalTargetGR.getMagLower(), mMax, 1.0, 1.0);//TODO: bValue
 			tempOnFaultGR.scaleToCumRate(0, sectRate);
 			// check for NaN rates
 			if(Double.isNaN(tempOnFaultGR.getTotalIncrRate())) {
