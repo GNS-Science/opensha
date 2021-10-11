@@ -23,7 +23,7 @@ import static org.opensha.commons.calc.magScalingRelations.magScalingRelImpl.Sti
 
 
 /**
- * Implements the simplified relations as provided by Mark Striling for the 2022 New Zealand NSHM 
+ * Implements the simplified relations as provided by Mark Stirling for the 2022 New Zealand NSHM
  * 
  * @version 0.0
  */
@@ -36,22 +36,29 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 	 */
 	protected Stirling_2021_SimplifiedNZ_FaultRegime faultRegime = CRUSTAL;
 	protected Stirling_2021_SimplifiedNZ_FaultRegime faultType = NONE;
-	protected Stirling_2021_SimplifiedNZ_FaultRegime epistemticBound = LOWER;
+	protected Stirling_2021_SimplifiedNZ_FaultRegime epistemicBound = MEAN;
 
 	public Stirling_2021_SimplifiedNZ_MagAreaRel(){
 		super();
 	}
 
-	public Stirling_2021_SimplifiedNZ_MagAreaRel(double initalRake, String initialEpistemticBound){
+	public Stirling_2021_SimplifiedNZ_MagAreaRel(double initalRake, String initialEpistemicBound){
 		super();
 		setRake(initalRake);
-		setEpistemicBound(initialEpistemticBound);
+		setEpistemicBound(initialEpistemicBound);
 	}
 
-	public Stirling_2021_SimplifiedNZ_MagAreaRel(String initialRegime, String initialEpistemticBound){
+	public Stirling_2021_SimplifiedNZ_MagAreaRel(String initialRegime, String initialEpistemicBound){
 		super();
 		setRegime(initialRegime);
-		setEpistemicBound(initialEpistemticBound);
+		setEpistemicBound(initialEpistemicBound);
+	}
+
+	public Stirling_2021_SimplifiedNZ_MagAreaRel(double inititalRake, String initialRegime, String initialEpistemicBound){
+		super();
+		setRake(inititalRake);
+		setRegime(initialRegime);
+		setEpistemicBound(initialEpistemicBound);
 	}
 
 	/* *
@@ -69,11 +76,19 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 		this.faultRegime = Stirling_2021_SimplifiedNZ_FaultRegime.fromRegime(regime);
 	}
 
+	public String getRegime(){
+		return faultRegime.name();
+	}
+
 	/* *
 	 * @param epistemic Bound
 	 */
 	public void setEpistemicBound(String epistemicBound) {
-		this.epistemticBound = Stirling_2021_SimplifiedNZ_FaultRegime.fromEpistemicBound(epistemicBound);
+		this.epistemicBound = Stirling_2021_SimplifiedNZ_FaultRegime.fromEpistemicBound(epistemicBound);
+	}
+
+	public String getEpistemicBound(){
+		return epistemicBound.name();
 	}
 
 	/**
@@ -120,30 +135,40 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 	 */
 
 	private double getC4log10A2Mw() {
+
+		//rhat AKA cValue => perhaps, we refactor rhat as cvalue
 		Double rhat = Double.NaN;
 		if (faultRegime == CRUSTAL || faultRegime == NONE) {
-			if (faultType == NONE || epistemticBound == NONE) {
+			if (faultType == NONE || epistemicBound == NONE) {
 				return Double.NaN;
-			} else if (faultType == STRIKE_SLIP && epistemticBound == LOWER) {
+			} else if (faultType == STRIKE_SLIP && epistemicBound == MEAN) {
+				rhat = 4.0;
+			} else if (faultType == STRIKE_SLIP && epistemicBound == LOWER) {
 				rhat = 3.65;
-			} else if (faultType == STRIKE_SLIP && epistemticBound == UPPER) {
+			} else if (faultType == STRIKE_SLIP && epistemicBound == UPPER) {
 				rhat= 4.30;
-			} else if (faultType == REVERSE_FAULTING && epistemticBound == LOWER) {
+			} else if (faultType == REVERSE_FAULTING && epistemicBound == MEAN) {
+				rhat = 4.13;
+			}	else if (faultType == REVERSE_FAULTING && epistemicBound == LOWER) {
 				rhat= 3.95;
-			} else if (faultType ==  REVERSE_FAULTING && epistemticBound == UPPER) {
+			} else if (faultType ==  REVERSE_FAULTING && epistemicBound == UPPER) {
 				rhat= 4.30;
-			} else if (faultType ==  NORMAL_FAULTING && epistemticBound == LOWER) {
+			} else if (faultType ==  NORMAL_FAULTING && epistemicBound == MEAN) {
+				rhat = 4.13;
+			} else if (faultType ==  NORMAL_FAULTING && epistemicBound == LOWER) {
 				rhat = 3.95;
-			} else if (faultType == NORMAL_FAULTING && epistemticBound == UPPER) {
+			} else if (faultType == NORMAL_FAULTING && epistemicBound == UPPER) {
 				rhat = 4.30;
-			} 
+			}
 		}
-		else if (faultRegime == SUBDUCTION_INTERFACE){ 
-			if (epistemticBound == LOWER) {
+		else if (faultRegime == SUBDUCTION_INTERFACE){
+			if (epistemicBound == MEAN) {
+				rhat = 3.85;
+			} else if (epistemicBound == LOWER) {
 				rhat = 3.60;
-			} else if (epistemticBound == UPPER) {
+			} else if (epistemicBound == UPPER) {
 				rhat= 4.10;
-			} else if (epistemticBound == NONE) {
+			} else if (epistemicBound == NONE) {
 				return Double.NaN;
 			}
 		}
@@ -155,6 +180,6 @@ public class Stirling_2021_SimplifiedNZ_MagAreaRel extends MagAreaRelationship {
 	 */
 	public String getName() {
 
-		return NAME + " " + faultType.toString() + " " + faultRegime.toString() + " " + epistemticBound.toString();
+		return NAME + " " + faultType.toString() + " " + faultRegime.toString() + " " + epistemicBound.toString();
 	}
 }
