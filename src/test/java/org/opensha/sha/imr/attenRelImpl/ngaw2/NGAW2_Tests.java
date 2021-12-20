@@ -98,7 +98,7 @@ public class NGAW2_Tests {
     	gmm.set_fault(getFaultStyleForRake(gmmIn.rake));
     }
 
-    private static FaultStyle getFaultStyleForRake(double rake) {
+    public static FaultStyle getFaultStyleForRake(double rake) {
     	if (Double.isNaN(rake)) return UNKNOWN;
 		return (rake >= 45 && rake <= 135) ? REVERSE :
 			   (rake >= -135 && rake <= -45) ? NORMAL : STRIKE_SLIP;
