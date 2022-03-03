@@ -32,7 +32,11 @@ public interface FileBackedModule extends ArchivableModule {
 
 	@Override
 	public default void writeToArchive(ZipOutputStream zout, String entryPrefix) throws IOException {
-		initEntry(zout, entryPrefix, getFileName());
+		writeToArchive(zout, entryPrefix, getFileName());
+	}
+
+	public default void writeToArchive(ZipOutputStream zout, String entryPrefix, String fileName) throws IOException {
+		initEntry(zout, entryPrefix, fileName);
 		
 		BufferedOutputStream out = new BufferedOutputStream(zout);
 		writeToStream(out);
@@ -79,13 +83,15 @@ public interface FileBackedModule extends ArchivableModule {
 		return zip.getEntry(entryName) != null;
 	}
 	
+	public static final int DEFAULT_BUFFER_SIZE = 1024 * 32 * 8; // 32 kBytes
+	
 	public static BufferedInputStream getInputStream(ZipFile zip, String entryPrefix, String fileName) throws IOException {
 		String entryName = ArchivableModule.getEntryName(entryPrefix, fileName);
 		Preconditions.checkNotNull(entryName, "entryName is null. prefix='%s', fileName='%s'", entryPrefix, fileName);
 		ZipEntry entry = zip.getEntry(entryName);
 		Preconditions.checkNotNull(entry, "Entry not found in zip archive: %s", entryName);
 		
-		return new BufferedInputStream(zip.getInputStream(entry));
+		return new BufferedInputStream(zip.getInputStream(entry), DEFAULT_BUFFER_SIZE);
 	}
 	/**
 	 * Initialize this module from the contents of the file (via this stream)

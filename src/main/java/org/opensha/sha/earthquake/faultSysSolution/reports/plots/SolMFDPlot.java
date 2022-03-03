@@ -31,6 +31,7 @@ import org.opensha.sha.earthquake.faultSysSolution.FaultSystemSolution;
 import org.opensha.sha.earthquake.faultSysSolution.modules.FaultGridAssociations;
 import org.opensha.sha.earthquake.faultSysSolution.modules.GridSourceProvider;
 import org.opensha.sha.earthquake.faultSysSolution.modules.InversionTargetMFDs;
+import org.opensha.sha.earthquake.faultSysSolution.modules.RegionsOfInterest;
 import org.opensha.sha.earthquake.faultSysSolution.reports.AbstractRupSetPlot;
 import org.opensha.sha.earthquake.faultSysSolution.reports.ReportMetadata;
 import org.opensha.sha.magdist.IncrementalMagFreqDist;
@@ -54,6 +55,11 @@ public class SolMFDPlot extends AbstractRupSetPlot {
 			// need a solution or targets
 			return null;
 		List<MFD_Plot> plots = new ArrayList<>();
+
+		MinMaxAveTracker magTrack = rupSetMagTrack(rupSet, meta);
+		System.out.println("Rup set mags: "+magTrack);
+		IncrementalMagFreqDist defaultMFD = initDefaultMFD(magTrack.getMin(), magTrack.getMax());
+		Range xRange = xRange(defaultMFD);
 		
 		double minY = 1e-6;
 		double maxY = 1e1;
@@ -89,10 +95,11 @@ public class SolMFDPlot extends AbstractRupSetPlot {
 				}
 				// make sure to include the whole constraint in the plot
 				for (Point2D pt : constraint)
-					if (pt.getY() > 1e-10)
+					if (pt.getY() > 1e-10 && xRange.contains(pt.getX()))
 						minY = Math.min(minY, Math.pow(10, Math.floor(Math.log10(pt.getY())+0.1)));
 				for (Point2D pt : constraint.getCumRateDistWithOffset())
-					maxY = Math.max(maxY, Math.pow(10, Math.ceil(Math.log10(pt.getY())-0.1)));
+					if (xRange.contains(pt.getX()))
+						maxY = Math.max(maxY, Math.pow(10, Math.ceil(Math.log10(pt.getY())-0.1)));
 			}
 		} else {
 			Preconditions.checkState(sol != null);
@@ -105,11 +112,29 @@ public class SolMFDPlot extends AbstractRupSetPlot {
 				region = rupSet.getModule(FaultGridAssociations.class).getRegion();
 			plots.add(new MFD_Plot("Total MFD", region));
 		}
-
-		MinMaxAveTracker magTrack = rupSetMagTrack(rupSet, meta);
-		System.out.println("Rup set mags: "+magTrack);
-		IncrementalMagFreqDist defaultMFD = initDefaultMFD(magTrack.getMin(), magTrack.getMax());
-		Range xRange = xRange(defaultMFD);
+		
+		if (rupSet.hasModule(RegionsOfInterest.class)) {
+			RegionsOfInterest roi = rupSet.getModule(RegionsOfInterest.class);
+			List<Region> regions = roi.getRegions();
+			for (int i=0; i<regions.size(); i++) {
+				Region region = regions.get(i);
+				String name = region.getName();
+				if (name == null || name.isBlank())
+					name = "Region Of Interest "+i;
+				// see if it's a duplicate
+				boolean duplicate = false;
+				for (MFD_Plot plot : plots) {
+					if (plot.region != null && plot.region.equalsRegion(region)) {
+						duplicate = true;
+						break;
+					}
+				}
+				if (duplicate)
+					System.out.println("Skipping duplicate region from ROI list: "+name);
+				else
+					plots.add(new MFD_Plot(name, region));
+			}
+		}
 
 		List<PlotSpec> incrSpecs = new ArrayList<>();
 		List<PlotSpec> cmlSpecs = new ArrayList<>();
@@ -162,10 +187,10 @@ public class SolMFDPlot extends AbstractRupSetPlot {
 			
 			if (meta.comparison != null && meta.comparison.sol != null)
 				addSolMFDs(meta.comparison.sol, "Comparison", COMP_COLOR, plot.region,
-						incrFuncs, cmlFuncs, incrChars, cmlChars, defaultMFD);
+						incrFuncs, cmlFuncs, incrChars, cmlChars, defaultMFD, xRange);
 			if (sol != null) {
 				double myMax = addSolMFDs(sol, "Solution", MAIN_COLOR, plot.region,
-						incrFuncs, cmlFuncs, incrChars, cmlChars, defaultMFD);
+						incrFuncs, cmlFuncs, incrChars, cmlChars, defaultMFD, xRange);
 				maxY = Math.max(maxY, Math.pow(10, Math.ceil(Math.log10(myMax)-0.1)));
 			}
 			
@@ -285,7 +310,7 @@ public class SolMFDPlot extends AbstractRupSetPlot {
 	private static double addSolMFDs(FaultSystemSolution sol, String name, Color color, Region region,
 			List<IncrementalMagFreqDist> incrFuncs, List<DiscretizedFunc> cmlFuncs,
 			List<PlotCurveCharacterstics> incrChars, List<PlotCurveCharacterstics> cmlChars,
-			IncrementalMagFreqDist defaultMFD) {
+			IncrementalMagFreqDist defaultMFD, Range rangeForMax) {
 		IncrementalMagFreqDist mfd = sol.calcNucleationMFD_forRegion(
 				region, defaultMFD.getMinX(), defaultMFD.getMaxX(), defaultMFD.size(), false);
 		if (sol.hasModule(GridSourceProvider.class)) {
@@ -294,7 +319,7 @@ public class SolMFDPlot extends AbstractRupSetPlot {
 			GriddedRegion gridReg = prov.getGriddedRegion();
 			boolean regionTest = region != null && region != gridReg && !region.getBorder().equals(gridReg.getBorder());
 			for (int i=0; i<gridReg.getNodeCount(); i++) {
-				IncrementalMagFreqDist nodeMFD = prov.getNodeMFD(i);
+				IncrementalMagFreqDist nodeMFD = prov.getMFD(i);
 				if (nodeMFD == null)
 					continue;
 				if (regionTest && !region.contains(gridReg.getLocation(i)))
@@ -332,7 +357,11 @@ public class SolMFDPlot extends AbstractRupSetPlot {
 		PlotCurveCharacterstics pChar = new PlotCurveCharacterstics(PlotLineType.SOLID, 5f, color);
 		incrChars.add(pChar);
 		cmlChars.add(pChar);
-		return cmlFunc.getMaxY();
+		double maxY = 0d;
+		for (Point2D pt : cmlFunc)
+			if (rangeForMax.contains(pt.getX()))
+				maxY = Math.max(maxY, pt.getY());
+		return maxY;
 	}
 
 	@Override

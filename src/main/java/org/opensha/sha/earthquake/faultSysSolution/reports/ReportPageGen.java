@@ -92,7 +92,7 @@ import scratch.UCERF3.enumTreeBranches.FaultModels;
 public class ReportPageGen {
 	
 	private ReportMetadata meta;
-	private List<? extends AbstractRupSetPlot> plots;
+	private List<AbstractRupSetPlot> plots;
 	private File outputDir;
 	private File indexDir;
 	
@@ -175,11 +175,11 @@ public class ReportPageGen {
 	}
 
 	public ReportPageGen(FaultSystemRupSet rupSet, FaultSystemSolution sol, String name, File outputDir,
-			List<? extends AbstractRupSetPlot> plots) {
+			List<AbstractRupSetPlot> plots) {
 		this(new ReportMetadata(new RupSetMetadata(name, rupSet, sol)), outputDir, plots);
 	}
 
-	public ReportPageGen(ReportMetadata meta, File outputDir, List<? extends AbstractRupSetPlot> plots) {
+	public ReportPageGen(ReportMetadata meta, File outputDir, List<AbstractRupSetPlot> plots) {
 		init(meta, outputDir, plots);
 	}
 	
@@ -279,10 +279,19 @@ public class ReportPageGen {
 					plots.remove(i);
 		}
 		
+		if (cmd.hasOption("default-max-dist"))
+			this.defaultMaxDist = Double.parseDouble(cmd.getOptionValue("default-max-dist"));
+		
+		cacheDir = FaultSysTools.getCacheDir(cmd);
+		
+		replot = cmd.hasOption("replot");
+		
+		init(meta, outputDir, plots);
+		
+		setNumThreads(FaultSysTools.getNumThreads(cmd));
+		
 		if (cmd.hasOption("skip-plausibility")) {
-			for (int i=plots.size(); --i>=0;)
-				if (plots.get(i) instanceof PlausibilityFilterPlot)
-					plots.remove(i);
+			skipPlausibility();
 		} else if (cmd.hasOption("alt-plausibility")) {
 			this.attachDefaultModules(primaryMeta, true);
 			File altPlausibilityCompareFile = new File(cmd.getOptionValue("alt-plausibility"));
@@ -296,34 +305,40 @@ public class ReportPageGen {
 					altPlausibilityCompareFile, primaryStrat,
 					primaryMeta.rupSet.getModule(SectionDistanceAzimuthCalculator.class));
 			
-			// try to insert just after regular filters
-			int insertionIndex = -1;
-			for (int i=0; i<plots.size(); i++)
-				if (plots.get(i) instanceof PlausibilityFilterPlot)
-					insertionIndex = i+1;
-			if (insertionIndex < 0)
-				insertionIndex = plots.size();
-			
-			
-			// TODO restore
-//			plots.add(new PlausibilityFilterPlot(altFilters, "Alternative Filters", false));
+			setAltPlausibility(altFilters, null, false);
 		}
-		
-		if (cmd.hasOption("default-max-dist"))
-			this.defaultMaxDist = Double.parseDouble(cmd.getOptionValue("default-max-dist"));
-		
-		cacheDir = FaultSysTools.getCacheDir(cmd);
-		
-		replot = cmd.hasOption("replot");
-		
-		int threads = FaultSysTools.getNumThreads(cmd);
-		for (AbstractRupSetPlot plot : plots)
-			plot.setNumThreads(threads);
-		
-		init(meta, outputDir, plots);
 	}
 	
-	private void init(ReportMetadata meta, File outputDir, List<? extends AbstractRupSetPlot> plots) {
+	public void setNumThreads(int threads) {
+		for (AbstractRupSetPlot plot : plots)
+			plot.setNumThreads(threads);
+	}
+	
+	public void setAltPlausibility(List<PlausibilityFilter> altFilters, String altName, boolean applyToComparison) {
+		// try to insert just after regular filters
+		int insertionIndex = -1;
+		for (int i=0; i<plots.size(); i++)
+			if (plots.get(i) instanceof PlausibilityFilterPlot)
+				insertionIndex = i+1;
+		if (insertionIndex < 0)
+			insertionIndex = plots.size();
+
+		plots.add(new PlausibilityFilterPlot(altFilters, altName, applyToComparison));
+	}
+	
+	public void skipPlausibility() {
+		for (int i=plots.size(); --i>=0;)
+			if (plots.get(i) instanceof PlausibilityFilterPlot)
+				plots.remove(i);
+	}
+	
+	public void skipSectBySect() {
+		for (int i=plots.size(); --i>=0;)
+			if (plots.get(i) instanceof SectBySectDetailPlots)
+				plots.remove(i);
+	}
+	
+	private void init(ReportMetadata meta, File outputDir, List<AbstractRupSetPlot> plots) {
 		this.meta = meta;
 		this.outputDir = outputDir;
 		this.plots = plots;
@@ -335,7 +350,7 @@ public class ReportPageGen {
 		return plots;
 	}
 
-	public void setPlots(List<? extends AbstractRupSetPlot> plots) {
+	public void setPlots(List<AbstractRupSetPlot> plots) {
 		this.plots = plots;
 	}
 	
@@ -469,7 +484,7 @@ public class ReportPageGen {
 		return 100d;
 	}
 	
-	static ClusterConnectionStrategy buildDefaultConnStrat(
+	public static ClusterConnectionStrategy buildDefaultConnStrat(
 			SectionDistanceAzimuthCalculator distAzCalc, Set<Jump> jumps, double defaultMaxDist) {
 		System.err.println("WARNING: primary rupture set doesn't have a connection strategy, using actual "
 				+ "connections, plus any up to the fallback maxDist="+(float)defaultMaxDist+" km. This may be used "
@@ -492,7 +507,7 @@ public class ReportPageGen {
 			checkLoadCoulombCache(altFilters, cacheDir, loadedCoulombCaches);
 	}
 	
-	static void checkLoadCoulombCache(List<PlausibilityFilter> filters,
+	public static void checkLoadCoulombCache(List<PlausibilityFilter> filters,
 			File cacheDir, Map<String, List<AggregatedStiffnessCache>> loadedCoulombCaches) throws IOException {
 		if (filters == null)
 			return;
@@ -1167,8 +1182,10 @@ public class ReportPageGen {
 			
 			PlotLevel level = PlotLevel.FULL;
 			
-			String inputName = "RSQSim 4983, SectArea=0.5";
-			File inputFile = new File(rupSetsDir, "rsqsim_4983_stitched_m6.5_skip65000_sectArea0.5.zip");
+//			String inputName = "RSQSim 4983, SectArea=0.5";
+//			File inputFile = new File(rupSetsDir, "rsqsim_4983_stitched_m6.5_skip65000_sectArea0.5.zip");
+			String inputName = "RSQSim 4983, SectArea=0.5, +Plausible Conns";
+			File inputFile = new File(rupSetsDir, "rsqsim_4983_stitched_m6.5_skip65000_sectArea0.5_plus_coulomb_conns.zip");
 //			String inputName = "RSQSim 5212, SectArea=0.5";
 //			File inputFile = new File(rupSetsDir, "rsqsim_5212_m6.5_skip50000_sectArea0.5.zip");
 //			String inputName = "RSQSim 498a3, SectArea=0.5, Uniques";
@@ -1194,12 +1211,15 @@ public class ReportPageGen {
 //			File compareFile = new File(rupSetsDir, "fm3_1_ucerf3.zip");
 //			File altPlausibilityCompareFile = null;
 //			File altPlausibilityCompareFile = new File(rupSetsDir, "u3_az_cff_cmls.json");
-			String compName = null;
-			File compareFile = null;
-			File altPlausibilityCompareFile = null;
+//			String compName = null;
+//			File compareFile = null;
+//			File altPlausibilityCompareFile = null;
 //			String compName = "Current Preferred";
 //			File compareFile = new File(rupSetsDir, "fm3_1_plausibleMulti15km_adaptive6km_direct_cmlRake360_jumpP0.001_slipP0.05incrCapDist_cff0.75IntsPos_comb2Paths_cffFavP0.01_cffFavRatioN2P0.5_sectFractGrow0.1.zip");
 //			File altPlausibilityCompareFile = null;
+			String compName = "Draft Model With Seg";
+			File compareFile = new File("/home/kevin/OpenSHA/UCERF4/batch_inversions/2022_02_15-nshm23_u3_hybrid_branches-FM3_1-CoulombRupSet-DsrUni-TotNuclRate-SubB1-JumpProb-2000ip/results_FM3_1_CoulombRupSet_branch_averaged.zip");
+			File altPlausibilityCompareFile = null;
 
 			List<String> argz = new ArrayList<>();
 			argz.add("--reports-dir"); argz.add("/home/kevin/markdown/rupture-sets");
@@ -1221,6 +1241,7 @@ public class ReportPageGen {
 				argz.add("--plot-level"); argz.add(level.name());
 			}
 			argz.add("--default-max-dist"); argz.add("15");
+//			argz.add("--skip-sect-by-sect");
 			argz.add("--replot");
 			args = argz.toArray(new String[0]);
 		}
