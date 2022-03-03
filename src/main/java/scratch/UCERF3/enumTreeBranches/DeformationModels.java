@@ -14,8 +14,6 @@ import org.opensha.commons.util.ExceptionUtils;
 import org.opensha.commons.util.XMLUtils;
 import org.opensha.sha.earthquake.faultSysSolution.FaultSystemRupSet;
 import org.opensha.sha.earthquake.faultSysSolution.FaultSystemSolution;
-import org.opensha.sha.earthquake.faultSysSolution.RupSetDeformationModel;
-import org.opensha.sha.earthquake.faultSysSolution.RupSetFaultModel;
 import org.opensha.sha.faultSurface.FaultSection;
 
 import com.google.common.base.Preconditions;
@@ -30,7 +28,7 @@ import scratch.UCERF3.utils.UCERF3_DataUtils;
 @DoesNotAffect(FaultSystemRupSet.RUP_SECTS_FILE_NAME)
 @Affects(FaultSystemRupSet.RUP_PROPS_FILE_NAME)
 @Affects(FaultSystemSolution.RATES_FILE_NAME)
-public enum DeformationModels implements U3LogicTreeBranchNode<DeformationModels>, RupSetDeformationModel {
+public enum DeformationModels implements U3LogicTreeBranchNode<DeformationModels> {
 	
 	//						Name					ShortName	Weight	FaultModel			File
 	// UCERF2
@@ -112,7 +110,7 @@ public enum DeformationModels implements U3LogicTreeBranchNode<DeformationModels
 		return name;
 	}
 	
-	public boolean isApplicableTo(RupSetFaultModel faultModel) {
+	public boolean isApplicableTo(FaultModels faultModel) {
 		return faultModels.contains(faultModel);
 	}
 	
@@ -211,11 +209,5 @@ public enum DeformationModels implements U3LogicTreeBranchNode<DeformationModels
 			e.printStackTrace();
 		}
 		return sects;
-	}
-
-	@Override
-	public List<? extends FaultSection> build(RupSetFaultModel faultModel) {
-		Preconditions.checkState(faultModel instanceof FaultModels, "Given fault model is not a UCERF3 fault model");
-		return new DeformationModelFetcher((FaultModels)faultModel, this, null, 0.1).getSubSectionList();
 	}
 }

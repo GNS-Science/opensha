@@ -141,7 +141,7 @@ public class FSS_ERF_ParamTest {
 		List<FaultSection> subSections = Lists.newArrayList();
 		
 		FaultModels fm = branch.getValue(FaultModels.class);
-		List<? extends FaultSection> fsd = fm.getFaultSections();
+		List<? extends FaultSection> fsd = fm.fetchFaultSections();
 		double maxSubSectionLength = 0.5;
 		double maxDistance = 5d;
 		

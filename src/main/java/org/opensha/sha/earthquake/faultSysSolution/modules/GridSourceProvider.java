@@ -16,20 +16,11 @@ import scratch.UCERF3.griddedSeismicity.AbstractGridSourceProvider;
 import scratch.UCERF3.griddedSeismicity.UCERF3_GridSourceGenerator;
 
 /**
- * Interface implemented by providers of gridded (sometimes referred to as 'other') seismicity sources. Each
- * {@link GridSourceProvider} supplies a {@link GriddedRegion}, accessible via {@link #getGriddedRegion()}. Then, at
- * each location in the {@link GriddedRegion}, a magnitude-frequency distribution (MFD) is supplied via
- * {@link #getMFD(int)}. That MFD may be comprised of multiple components that are also available individually:
- * sub-seismogenic ruptures associated with a modeled faults (see {@link #getMFD_SubSeisOnFault(int)}), and/or ruptures
- * that are unassociated with any modeled fault (see {@link #getMFD_Unassociated(int)}).
- * <p>
- * Focal mechanisms at each grid location are available via the {@link #getFracStrikeSlip(int)},
- * {@link #getFracReverse(int)}, and {@link #getFracNormal(int)} methods. {@link ProbEqkSource} implementations for are
- * available via the {@link #getSource(int, double, boolean, BackgroundRupType)} method, and also via related methods
- * for sub-seismogenic and/or unassociated sources only.
+ * Interface implemented by providers of gridded (sometimes referred to as
+ * 'other') seismicity sources.
  * 
  * @author Peter Powers
- * @see AbstractGridSourceProvider
+ * @version $Id:$
  */
 public interface GridSourceProvider extends BranchAverageableModule<GridSourceProvider> {
 
@@ -40,117 +31,112 @@ public interface GridSourceProvider extends BranchAverageableModule<GridSourcePr
 	public int size();
 
 	/**
-	 * Return the source at {@code gridIndex}.
-	 * 
-	 * @param gridIndex of source to retrieve
-	 * @param duration of forecast
-	 * @param filterAftershocks
-	 * @param bgRupType type of source to build
-	 * @return the source at {@code index}
-	 */
-	public ProbEqkSource getSource(int gridIndex, double duration,
-			boolean filterAftershocks, BackgroundRupType bgRupType);
-	
-
-	/**
-	 * Return the source at {@code gridIndex}, where only the on-fault sub-seismogenic component is included
-	 * (no seismicity that is unassociated with modeled faults).  This returns null if there is no on-fault
-	 * sub-seismogenic component for the grid location
-	 * 
+	 * Return the source at {@code index}.
 	 * @param index of source to retrieve
 	 * @param duration of forecast
 	 * @param filterAftershocks
-	 * @param bgRupType type of source to build
+	 * @param crosshair sources if true,
 	 * @return the source at {@code index}
 	 */
-	public ProbEqkSource getSourceSubSeisOnFault(int gridIndex, double duration,
+	public ProbEqkSource getSource(int index, double duration,
 			boolean filterAftershocks, BackgroundRupType bgRupType);
+	
 
 	/**
-	 * Return the source at {@code gridIndex}, where only the component that is unassociated with modeled faults
-	 * included (no on-fault sub-seismogenic component). This returns null if there is no unassociated component
-	 * for the grid location
-	 * 
-	 * @param gridIndex of source to retrieve
+	 * Return the source at {@code index}, where only the subseismo component is included
+	 * (no truly off fault component).  This returns null if there is no subseismo component
+	 * for the grid node
+	 * @param index of source to retrieve
 	 * @param duration of forecast
 	 * @param filterAftershocks
-	 * @param bgRupType type of source to build
+	 * @param crosshair sources if true,
 	 * @return the source at {@code index}
 	 */
-	public ProbEqkSource getSourceUnassociated(int gridIndex, double duration,
+	public ProbEqkSource getSourceSubseismoOnly(int index, double duration,
 			boolean filterAftershocks, BackgroundRupType bgRupType);
 
 	/**
-	 * Returns the unassociated MFD of a grid location, if any exists, null otherwise.
-	 * @param gridIndex grid index
+	 * Return the source at {@code index}, where only the truly off fault component is included
+	 * (no subseismo component).  This returns null if there is no truly off fault component
+	 * for the grid node
+	 * @param index of source to retrieve
+	 * @param duration of forecast
+	 * @param filterAftershocks
+	 * @param crosshair sources if true,
+	 * @return the source at {@code index}
+	 */
+	public ProbEqkSource getSourceTrulyOffOnly(int index, double duration,
+			boolean filterAftershocks, BackgroundRupType bgRupType);
+
+	/**
+	 * Returns the unassociated MFD of a grid node.
+	 * @param idx node index
 	 * @return the MFD
 	 */
-	public IncrementalMagFreqDist getMFD_Unassociated(int gridIndex);
+	public IncrementalMagFreqDist getNodeUnassociatedMFD(int idx);
 	
 	/**
-	 * Returns the on-fault sub-seismogenic MFD associated with a grid location, if any
-	 * exists, null otherwise
-	 * @param gridIndex grid index
+	 * Returns the sub-seismogenic MFD associated with a grid node, if any
+	 * exists.
+	 * @param idx node index
 	 * @return the MFD
 	 */
-	public IncrementalMagFreqDist getMFD_SubSeisOnFault(int gridIndex);
+	public IncrementalMagFreqDist getNodeSubSeisMFD(int idx);
 	
 	/**
-	 * Returns the MFD associated with a grid location trimmed to the supplied 
+	 * Returns the MFD associated with a grid node trimmed to the supplied 
 	 * minimum magnitude and the maximum non-zero magnitude.
 	 * 
-	 * @param gridIndex grid index
-	 * @param minMag minimum magnitude to trim MFD to
+	 * @param idx node index
+	 * @param minMag minimum magniitude to trim MFD to
 	 * @return the trimmed MFD
 	 */
-	public IncrementalMagFreqDist getMFD(int gridIndex, double minMag);
+	public IncrementalMagFreqDist getNodeMFD(int idx, double minMag);
 	
 	/**
-	 * Returns the MFD associated with a grid location. This is the sum of any
-	 * unassociated and sub-seismogenic MFDs for the location.
-	 * 
-	 * @param gridIndex grid index
+	 * Returns the MFD associated with a grid node. This is the sum of any
+	 * unassociated and sub-seismogenic MFDs for the node.
+	 * @param idx node index
 	 * @return the MFD
-	 * @see UCERF3_GridSourceGenerator#getMFD_Unassociated(int)
-	 * @see UCERF3_GridSourceGenerator#getMFD_SubSeisOnFault(int)
+	 * @see UCERF3_GridSourceGenerator#getNodeUnassociatedMFD(int)
+	 * @see UCERF3_GridSourceGenerator#getNodeSubSeisMFD(int)
 	 */
-	public IncrementalMagFreqDist getMFD(int gridIndex);
+	public IncrementalMagFreqDist getNodeMFD(int idx);
 	
 	/**
 	 * Returns the gridded region associated with these grid sources.
-	 * 
 	 * @return the gridded region
 	 */
 	public GriddedRegion getGriddedRegion();
 	
 	/**
-	 * Returns the fraction of focal mechanisms at this grid index that are strike slip
-	 * @param gridIndex
+	 * Returns the fraction of focal mechanisms at this node that are strike slip
+	 * @param idx
 	 * @return
 	 */
-	public abstract double getFracStrikeSlip(int gridIndex);
+	public abstract double getFracStrikeSlip(int idx);
 
 	/**
-	 * Returns the fraction of focal mechanisms at this grid index that are reverse
-	 * @param gridIndex
+	 * Returns the fraction of focal mechanisms at this node that are reverse
+	 * @param idx
 	 * @return
 	 */
-	public abstract double getFracReverse(int gridIndex);
+	public abstract double getFracReverse(int idx);
 
 	/**
-	 * Returns the fraction of focal mechanisms at this grid index that are normal
-	 * @param gridIndex
+	 * Returns the fraction of focal mechanisms at this node that are normal
+	 * @param idx
 	 * @return
 	 */
-	public abstract double getFracNormal(int gridIndex);
+	public abstract double getFracNormal(int idx);
 	
 	/**
 	 * Scales all MFDs by the given values, and throws an exception if the array size is not equal to the
-	 * number of locations in the gridded region
+	 * number of nodes in the gridded region
 	 * 
 	 * @param valuesArray
 	 */
-	public void scaleAllMFDs(double[] valuesArray);
+	public void scaleAllNodeMFDs(double[] valuesArray);
 
 	@Override
 	default AveragingAccumulator<GridSourceProvider> averagingAccumulator() {
@@ -158,8 +144,8 @@ public interface GridSourceProvider extends BranchAverageableModule<GridSourcePr
 			
 			private GridSourceProvider refGridProv = null;
 			private GriddedRegion gridReg = null;
-			private Map<Integer, IncrementalMagFreqDist> subSeisMFDs = null;
-			private Map<Integer, IncrementalMagFreqDist> unassociatedMFDs = null;
+			private Map<Integer, IncrementalMagFreqDist> nodeSubSeisMFDs = null;
+			private Map<Integer, IncrementalMagFreqDist> nodeUnassociatedMFDs = null;
 			
 			private double totWeight = 0;
 			
@@ -175,8 +161,8 @@ public interface GridSourceProvider extends BranchAverageableModule<GridSourcePr
 				if (refGridProv == null) {
 					refGridProv = module;
 					gridReg = module.getGriddedRegion();
-					subSeisMFDs = new HashMap<>();
-					unassociatedMFDs = new HashMap<>();
+					nodeSubSeisMFDs = new HashMap<>();
+					nodeUnassociatedMFDs = new HashMap<>();
 					
 					fractSS = new double[refGridProv.size()];
 					fractR = new double[fractSS.length];
@@ -186,8 +172,8 @@ public interface GridSourceProvider extends BranchAverageableModule<GridSourcePr
 				}
 				totWeight += relWeight;
 				for (int i=0; i<gridReg.getNodeCount(); i++) {
-					addWeighted(subSeisMFDs, i, module.getMFD_SubSeisOnFault(i), relWeight);
-					addWeighted(unassociatedMFDs, i, module.getMFD_Unassociated(i), relWeight);
+					addWeighted(nodeSubSeisMFDs, i, module.getNodeSubSeisMFD(i), relWeight);
+					addWeighted(nodeUnassociatedMFDs, i, module.getNodeUnassociatedMFD(i), relWeight);
 					fractSS[i] += module.getFracStrikeSlip(i)*relWeight;
 					fractR[i] += module.getFracReverse(i)*relWeight;
 					fractN[i] += module.getFracNormal(i)*relWeight;
@@ -198,19 +184,19 @@ public interface GridSourceProvider extends BranchAverageableModule<GridSourcePr
 			public GridSourceProvider getAverage() {
 				double scale = 1d/totWeight;
 				for (int i=0; i<fractSS.length; i++) {
-					IncrementalMagFreqDist subSeisMFD = subSeisMFDs.get(i);
+					IncrementalMagFreqDist subSeisMFD = nodeSubSeisMFDs.get(i);
 					if (subSeisMFD != null)
 						subSeisMFD.scale(scale);
-					IncrementalMagFreqDist unassociatedMFD = unassociatedMFDs.get(i);
-					if (unassociatedMFD != null)
-						unassociatedMFD.scale(scale);
+					IncrementalMagFreqDist nodeUnassociatedMFD = nodeUnassociatedMFDs.get(i);
+					if (nodeUnassociatedMFD != null)
+						nodeUnassociatedMFD.scale(scale);
 					fractSS[i] *= scale;
 					fractR[i] *= scale;
 					fractN[i] *= scale;
 				}
 				
 				return new AbstractGridSourceProvider.Precomputed(refGridProv.getGriddedRegion(),
-						subSeisMFDs, unassociatedMFDs, fractSS, fractN, fractR);
+						nodeSubSeisMFDs, nodeUnassociatedMFDs, fractSS, fractN, fractR);
 			}
 		};
 	}

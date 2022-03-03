@@ -11,7 +11,6 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Supplier;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.opensha.commons.data.Named;
@@ -82,7 +81,7 @@ import org.opensha.sha.imr.mod.impl.stewartSiteSpecific.StewartAfshariGoulet2017
  * @author Peter Powers
  * @version $Id: AttenRelRef.java 11385 2016-08-24 22:40:54Z kmilner $
  */
-public enum AttenRelRef implements Named, Supplier<ScalarIMR> {
+public enum AttenRelRef implements Named {
 
 	// PRODUCTION
 	
@@ -330,7 +329,7 @@ public enum AttenRelRef implements Named, Supplier<ScalarIMR> {
 	 *         <code>AttenuationRelationship</code>s
 	 * @see DevStatus
 	 */
-	public static Set<AttenRelRef> getAll() {
+	public static Set<AttenRelRef> get() {
 		return get(PRODUCTION, DEVELOPMENT, EXPERIMENTAL);
 	}
 
@@ -386,7 +385,7 @@ public enum AttenRelRef implements Named, Supplier<ScalarIMR> {
 	 */
 	public static List<AttenuationRelationship> instanceList(
 			ParameterChangeWarningListener listener, boolean sorted) {
-		return buildInstanceList(getAll(), listener, sorted);
+		return buildInstanceList(get(), listener, sorted);
 	}
 
 	/**
@@ -461,13 +460,6 @@ public enum AttenRelRef implements Named, Supplier<ScalarIMR> {
 		}
 		if (sorted) Collections.sort(arList);
 		return arList;
-	}
-
-	@Override
-	public ScalarIMR get() {
-		ScalarIMR instance = instance(null);
-		instance.setParamDefaults();
-		return instance;
 	}
 
 }

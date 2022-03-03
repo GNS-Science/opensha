@@ -80,7 +80,6 @@ public class GeoJSONFaultReader {
 		HashSet<Integer> prevIDs = new HashSet<>();
 		
 		HashMap<String, Integer> nameCounts = new HashMap<>();
-		HashMap<String, GeoJSONFaultSection> nameSectMap = new HashMap<>();
 		
 		for (Feature feature : features.features) {
 			GeoJSONFaultSection sect = GeoJSONFaultSection.fromFeature(feature);
@@ -93,27 +92,11 @@ public class GeoJSONFaultReader {
 			} else {
 				// duplicate name!
 				nameCount++;
-				String state = sect.getProperty("PrimState", "");
-				Preconditions.checkState(!state.isBlank(), "State cannot be blank in the case of duplicate fault names");
-				String newSectName = sectName+" ("+state+")";
+				String newSectName = sectName+" ("+nameCount+")";
 				System.err.println("WARNING: duplicate fault section name detected, changing '"+sectName+"' to '"+newSectName+"'");
 				sect.setSectionName(newSectName);
-				if (nameSectMap.containsKey(sectName)) {
-					// rename the first one as well
-					GeoJSONFaultSection prevSect = nameSectMap.remove(sectName);
-					String prevState = prevSect.getProperty("PrimState", "");
-					Preconditions.checkState(!prevState.isBlank(), "State cannot be blank in the case of duplicate fault names");
-					String newPrevSectName = sectName+" ("+prevState+")";
-					prevSect.setSectionName(newPrevSectName);
-					nameSectMap.put(newPrevSectName, prevSect);
-					System.err.println("\tretroactively changing previous '"+sectName+"' to '"+newPrevSectName+"'");
-				}
 			}
-			nameCounts.put(sectName, nameCount); // this is the original section name
-			
-			sectName = sect.getSectionName();
-			Preconditions.checkState(!nameSectMap.containsKey(sectName), "Duplicate name should have been caught: %s", sectName);
-			nameSectMap.put(sectName, sect);
+			nameCounts.put(sectName, nameCount);
 			
 			ret.add(sect);
 			prevIDs.add(id);
@@ -188,23 +171,10 @@ public class GeoJSONFaultReader {
 			double highRate = props.getDouble("HighRate", Double.NaN);
 			String treatment = props.get("Treat", null);
 			String rateType = props.get("RateType", null);
-			double stdDev = props.getDouble("StdMinus", Double.NaN);
-			if (Double.isNaN(stdDev))
-				stdDev = props.getDouble("Stdev", Double.NaN);
+			double stdDev = props.getDouble("Stdev", Double.NaN);
 			
 			processed.add(id);
 			GeoJSONFaultSection sect = idMapped.get(id);
-			String sectName = sect.getName();
-			String dmFaultName = props.get("FaultName", "");
-			if (!sectName.startsWith(dmFaultName))
-				System.err.println("WARNING: name mismatch for "+id+": '"+sectName+"' != '"+dmFaultName+"'");
-			// use startsWith as we might attach a suffix
-			// also strip all whitespace
-			
-			String compSectName = sectName.replaceAll("\\W+", "");
-			String compDMName = dmFaultName.replaceAll("\\W+", "");
-			Preconditions.checkState(compSectName.startsWith(compDMName) || compDMName.startsWith(compSectName),
-					"DM/FM name mismatch for %s: '%s' != '%s'", id, sect.getName(), dmFaultName);
 			
 			if (prefRate < 0d || !Double.isFinite(prefRate)) {
 				System.err.println("No rate available (setting to zero) for "+id+". "+sect.getSectionName());
@@ -235,15 +205,7 @@ public class GeoJSONFaultReader {
 			else
 				sect.setProperty("RateType", rateType);
 			
-			if (Double.isFinite(stdDev)) {
-				if (stdDev == 0d) {
-					Preconditions.checkState(prefRate == 0d,
-							"Slip rate is nonzero but standard deviation is zero for %s", sect.getName());
-					System.err.println("WARNING: setting fake slip rate standard deviation of 0.01 mm/yr for "
-							+sect.getName()+" that has a zero slip rate and zero slip rate standard deviation.");
-					stdDev = 0.01d;
-				}
-			} else {
+			if (!Double.isFinite(stdDev)) {
 				numInferred++;
 				// infer std dev from bounds
 				// assume bounds are +/- 2 sigma (95% CI), and thus std dev is (high-low)/4
@@ -255,21 +217,8 @@ public class GeoJSONFaultReader {
 		System.out.println("Attached deformation model rates for "+processed.size()+" sections");
 		if (numInferred > 0)
 			System.err.println("WARNING: inferred "+numInferred+" slip rate values from bounds, assuming bounds are 2-sigma");
-		if (sects.size() != processed.size()) {
-			// find the missing section(s)
-			String missingStr = null;
-			for (GeoJSONFaultSection sect : sects) {
-				if (!processed.contains(sect.getSectionId())) {
-					if (missingStr == null)
-						missingStr = "";
-					else
-						missingStr += "; ";
-					missingStr += sect.getSectionId()+". "+sect.getSectionName();
-				}
-			}
-			int num = sects.size()-processed.size();
-			throw new IllegalStateException("No mappings found for "+num+" section(s): "+missingStr);
-		}
+		Preconditions.checkState(sects.size() == processed.size(),
+				"No mappings for %s sections", sects.size()-processed.size());
 	}
 	
 	/*
@@ -510,7 +459,7 @@ public class GeoJSONFaultReader {
 	
 	public static final String NSHM23_SECTS_CUR_VERSION = "v1p4";
 	private static final String NSHM23_SECTS_PATH_PREFIX = "/data/erf/nshm23/fault_models/";
-	public static final String NSHM23_DM_CUR_VERSION = "v1p2";
+	public static final String NSHM23_DM_CUR_VERSION = "v1p1";
 	private static final String NSHM23_DM_PATH_PREFIX = "/data/erf/nshm23/def_models/";
 	
 	public static List<FaultSection> buildNSHM23SubSects() throws IOException {
@@ -557,8 +506,8 @@ public class GeoJSONFaultReader {
 		// add slip rates
 		Map<Integer, List<GeoDBSlipRateRecord>> slipRates = GeoJSONFaultReader.readGeoDB(geoDBReader);
 		List<FaultSection> fallbacks = new ArrayList<>();
-		fallbacks.addAll(FaultModels.FM3_1.getFaultSections());
-		fallbacks.addAll(FaultModels.FM3_2.getFaultSections());
+		fallbacks.addAll(FaultModels.FM3_1.fetchFaultSections());
+		fallbacks.addAll(FaultModels.FM3_2.fetchFaultSections());
 		GeoJSONFaultReader.testMapSlipRates(sects, slipRates, 1d, fallbacks);
 		return buildSubSects(sects);
 	}

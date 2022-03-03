@@ -134,7 +134,7 @@ class DemoFileCreator {
 		ThreadedSimulatedAnnealing tsa = new ThreadedSimulatedAnnealing(
 				invGen.getA(), invGen.getD(), invGen.getInitialSolution(), threads, subCompletion);
 		tsa.setRandom(new Random(123456789l));
-		long iterations = tsa.iterate(completion).iterations;
+		long iterations = tsa.iterate(completion);
 		System.out.println("Completed "+iterations+" iterations");
 		double[] rates = invGen.adjustSolutionForWaterLevel(tsa.getBestSolution());
 		

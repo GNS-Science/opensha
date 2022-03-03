@@ -236,8 +236,6 @@ public class U3AveSlipConstraint extends SectMappedUncertainDataConstraint imple
 		if (mappingCol > 0)
 			wb.write(new FileOutputStream(mappingFile));
 		
-		wb.close();
-		
 		return constraints;
 	}
 	

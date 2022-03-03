@@ -151,11 +151,7 @@ public class StandardFaultSysModulesTest {
 			constrs.add(mfd);
 		}
 		InversionTargetMFDs.Precomputed module = new InversionTargetMFDs.Precomputed(demoRupSet, fakeMFD(), fakeMFD(),
-				fakeMFD(), fakeMFD(), constrs, fakeSubSeismoMFDs(), null);
-		testModuleSerialization(demoRupSet.getArchive(), demoRupSet, module, InversionTargetMFDs.class);
-		// now add supra-seis (just use sub seis as supra, doesn't matter since it's fake anyway)
-		module = new InversionTargetMFDs.Precomputed(demoRupSet, fakeMFD(), fakeMFD(),
-				fakeMFD(), fakeMFD(), constrs, fakeSubSeismoMFDs(), fakeSubSeismoMFDs().getAll());
+				fakeMFD(), fakeMFD(), constrs, fakeSubSeismoMFDs());
 		testModuleSerialization(demoRupSet.getArchive(), demoRupSet, module, InversionTargetMFDs.class);
 	}
 	
@@ -297,29 +293,6 @@ public class StandardFaultSysModulesTest {
 				paleoData, UCERF3_PaleoProbabilityModel.load(), slipData, U3AveSlipConstraint.slip_prob_model);
 		
 		testModuleSerialization(demoRupSet.getArchive(), demoRupSet, module, PaleoseismicConstraintData.class);
-	}
-	
-	@Test
-	public void testRegionsOfInterest() throws IOException {
-		RegionsOfInterest module = new RegionsOfInterest(new CaliforniaRegions.LA_BOX(), new CaliforniaRegions.SF_BOX());
-		
-		testModuleSerialization(demoRupSet.getArchive(), demoRupSet, module, RegionsOfInterest.class);
-	}
-	
-	@Test
-	public void testSolutionSlipRates() throws IOException {
-		SolutionSlipRates module = SolutionSlipRates.calc(demoSol,
-				AveSlipModule.forModel(demoSol.getRupSet(), ScalingRelationships.ELLSWORTH_B),
-				new SlipAlongRuptureModel.Default());
-		
-		testModuleSerialization(demoSol.getArchive(), demoSol, module, SolutionSlipRates.class);
-	}
-	
-	@Test
-	public void testConnectivityClusters() throws IOException {
-		ConnectivityClusters module = ConnectivityClusters.build(demoRupSet);
-		
-		testModuleSerialization(demoRupSet.getArchive(), demoRupSet, module, ConnectivityClusters.class);
 	}
 	
 	private static double[] randArray(int len) {

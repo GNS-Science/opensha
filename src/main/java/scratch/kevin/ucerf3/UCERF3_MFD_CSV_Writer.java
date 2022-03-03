@@ -15,18 +15,18 @@ import org.opensha.sha.magdist.SummedMagFreqDist;
 
 import com.google.common.base.Preconditions;
 
-import scratch.UCERF3.U3CompoundFaultSystemSolution;
+import scratch.UCERF3.CompoundFaultSystemSolution;
 import scratch.UCERF3.enumTreeBranches.DeformationModels;
 import scratch.UCERF3.enumTreeBranches.FaultModels;
 import scratch.UCERF3.inversion.InversionFaultSystemSolution;
 import scratch.UCERF3.inversion.U3InversionTargetMFDs;
-import scratch.UCERF3.logicTree.U3APrioriBranchWeightProvider;
+import scratch.UCERF3.logicTree.APrioriBranchWeightProvider;
 import scratch.UCERF3.logicTree.U3LogicTreeBranch;
 
 class UCERF3_MFD_CSV_Writer {
 
 	public static void main(String[] args) throws ZipException, IOException {
-		U3CompoundFaultSystemSolution cfss = U3CompoundFaultSystemSolution.fromZipFile(
+		CompoundFaultSystemSolution cfss = CompoundFaultSystemSolution.fromZipFile(
 				new File("/home/kevin/workspace/opensha-ucerf3/src/scratch/UCERF3/data/scratch/InversionSolutions/"
 						+ "2013_05_10-ucerf3p3-production-10runs_COMPOUND_SOL.zip"));
 		
@@ -41,7 +41,7 @@ class UCERF3_MFD_CSV_Writer {
 		File outputDir = new File("/home/kevin/OpenSHA/UCERF3/mfd_csv_files/nocal");
 		Preconditions.checkState(outputDir.exists() || outputDir.mkdir());
 		
-		U3APrioriBranchWeightProvider weightProv = new U3APrioriBranchWeightProvider();
+		APrioriBranchWeightProvider weightProv = new APrioriBranchWeightProvider();
 		
 		List<IncrementalMagFreqDist> offMFDs = new ArrayList<>();
 		List<IncrementalMagFreqDist> subMFDs = new ArrayList<>();

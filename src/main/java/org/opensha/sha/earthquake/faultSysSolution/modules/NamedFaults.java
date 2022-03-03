@@ -181,19 +181,4 @@ ConstantAverageable<NamedFaults>, JSON_TypeAdapterBackedModule<Map<String, List<
 		return sectName;
 	}
 
-	@Override
-	public Class<NamedFaults> getAveragingType() {
-		return NamedFaults.class;
-	}
-
-	@Override
-	public boolean isIdentical(NamedFaults module) {
-		if (namedFaults.size() != module.namedFaults.size())
-			return false;
-		for (String name : namedFaults.keySet())
-			if (!module.namedFaults.containsKey(name))
-				return false;
-		return true;
-	}
-
 }

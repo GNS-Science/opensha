@@ -827,9 +827,9 @@ public class ComcatReportPageGen {
 	
 	private synchronized Collection<FaultSection> getU3Faults() {
 		if (faults == null) {
-			Map<Integer, FaultSection> map = FaultModels.FM3_1.getFaultSectionIDMap();
+			Map<Integer, FaultSection> map = FaultModels.FM3_1.fetchFaultSectionsMap();
 			map = new HashMap<>(map);
-			map.putAll(FaultModels.FM3_2.getFaultSectionIDMap());
+			map.putAll(FaultModels.FM3_2.fetchFaultSectionsMap());
 			faults = map.values();
 		}
 		return faults;
