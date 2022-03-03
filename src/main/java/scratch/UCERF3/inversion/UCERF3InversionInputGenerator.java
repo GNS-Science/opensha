@@ -1682,7 +1682,9 @@ public class UCERF3InversionInputGenerator extends InversionInputGenerator {
 		
 		FaultSystemRupSet.Builder builder = FaultSystemRupSet.builder(
 				origRupSet.getFaultSectionDataList(), origRupSet.getSectionIndicesForAllRups());
-		FaultSystemRupSet rupSet = new U3InversionConfigFactory().updateRuptureSetForBranch(builder.build(), origBranch);
+		builder.forU3Branch(origBranch);
+		
+		FaultSystemRupSet rupSet = builder.build();
 		
 		U3LogicTreeBranch newBranch = rupSet.requireModule(U3LogicTreeBranch.class);
 		Preconditions.checkState(newBranch.equals(origBranch));

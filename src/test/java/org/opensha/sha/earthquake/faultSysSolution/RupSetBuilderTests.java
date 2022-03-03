@@ -7,12 +7,9 @@ import org.junit.Test;
 import org.opensha.sha.earthquake.faultSysSolution.modules.AveSlipModule;
 import org.opensha.sha.earthquake.faultSysSolution.modules.ModSectMinMags;
 import org.opensha.sha.earthquake.faultSysSolution.modules.SlipAlongRuptureModel;
-import org.opensha.sha.earthquake.faultSysSolution.util.FaultSysTools;
 
-import scratch.UCERF3.enumTreeBranches.ScalingRelationships;
 import scratch.UCERF3.inversion.InversionFaultSystemRupSet;
 import scratch.UCERF3.inversion.InversionFaultSystemRupSetFactory;
-import scratch.UCERF3.inversion.U3InversionConfigFactory;
 import scratch.UCERF3.logicTree.U3LogicTreeBranch;
 
 public class RupSetBuilderTests {
@@ -23,13 +20,11 @@ public class RupSetBuilderTests {
 	@BeforeClass
 	public static void setUpBeforeClass() throws Exception {
 		System.out.println("Building original U3 InversionFaultSystemRupSet");
-		U3LogicTreeBranch branch = U3LogicTreeBranch.DEFAULT;
-		u3Default = InversionFaultSystemRupSetFactory.forBranch(branch);
+		u3Default = InversionFaultSystemRupSetFactory.forBranch(U3LogicTreeBranch.DEFAULT);
 		System.out.println("Building reproduction");
 		reproduced = FaultSystemRupSet.builder(
 				u3Default.getFaultSectionDataList(), u3Default.getSectionIndicesForAllRups())
-				.forScalingRelationship(branch.requireValue(ScalingRelationships.class)).build();
-		reproduced = new U3InversionConfigFactory().updateRuptureSetForBranch(reproduced, branch);
+				.forU3Branch(U3LogicTreeBranch.DEFAULT).build();
 	}
 
 	@Test

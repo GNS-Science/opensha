@@ -101,7 +101,6 @@ public class MPJHazardCurveDriver extends MPJTaskCalculator {
 	}
 	
 	public static void main(String[] args) {
-		System.setProperty("java.awt.headless", "true");
 		try {
 			args = MPJTaskCalculator.initMPJ(args);
 			

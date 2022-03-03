@@ -194,7 +194,7 @@ public class DeformationModelsCalc {
 //		sectData.addAll(FaultModels.FM3_2.fetchFaultSections());
 		
 		double sectLen = 7d;
-		List<? extends FaultSection> faultData =  faultModel.getFaultSections();
+		List<? extends FaultSection> faultData =  faultModel.fetchFaultSections();
 		List<FaultSection> sectData  = Lists.newArrayList();
 		for (FaultSection fault : faultData) {
 			sectData.addAll(fault.getSubSectionsList(sectLen));
@@ -2286,7 +2286,7 @@ public class DeformationModelsCalc {
 			File faultNamesFile = new File(dir, fm.encodeChoiceString()+"_fault_names.txt");
 			FileWriter namesFW = new FileWriter(faultNamesFile);
 			namesFW.write("# Fault ID\tFault Name\n");
-			List<FaultSection> parentSects = fm.getFaultSections();
+			List<FaultSection> parentSects = fm.fetchFaultSections();
 			Collections.sort(parentSects, new NamedComparator());
 			for (FaultSection sect : parentSects)
 				namesFW.write(sect.getSectionId()+"\t"+sect.getSectionName()+"\n");
@@ -2385,7 +2385,7 @@ public class DeformationModelsCalc {
 		for (FaultModels fm : FaultModels.values()) {
 			if (fm.getRelativeWeight(null) == 0)
 				continue;
-			List<? extends FaultSection> sects = fm.getFaultSections();
+			ArrayList<? extends FaultSection> sects = fm.fetchFaultSections();
 			File fmFile = new File(dir, dateStr+"-"+fm.getShortName()+"-sections.txt");
 			List<String> metaData = Lists.newArrayList();
 			metaData.add("Fault Sections file generated on "+dateStr+" by "+methodName);

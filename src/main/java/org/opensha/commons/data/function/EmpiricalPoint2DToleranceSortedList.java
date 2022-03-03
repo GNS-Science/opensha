@@ -21,15 +21,16 @@ public class EmpiricalPoint2DToleranceSortedList extends Point2DToleranceSortedA
 	public boolean add(Point2D e) {
 		double x = e.getX();
 		double y = e.getY();
-		
-		// new way: only do the binary search once, the reuse thie index for add/set calls
-		int ind = binarySearch(new Point2D.Double(x, 0d));
-		if (ind < 0)
-			super.add(-ind-1, new Point2D.Double(x, y));
+		Point2D point = this.get(x);
+		if (point == null)
+			point = new Point2D.Double(x, y);
 		else
-			super.set(ind, new Point2D.Double(x, get(ind).getY()+y));
-		// true means anything changed, not that it's a new point
-		return true;
+			point.setLocation(x, point.getY() + y);
+		boolean isNew = super.add(point);
+		
+//		super.recalcMinMaxYs();
+		
+		return isNew;
 	}
 
 	@Override

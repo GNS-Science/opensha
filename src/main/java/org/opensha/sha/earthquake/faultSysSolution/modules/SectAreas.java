@@ -159,22 +159,6 @@ public abstract class SectAreas implements SubModule<FaultSystemRupSet> {
 			this.sectAreas = sectAreas;
 		}
 
-		@Override
-		public Class<Precomputed> getAveragingType() {
-			return Precomputed.class;
-		}
-
-		@Override
-		public boolean isIdentical(Precomputed module) {
-			if (sectAreas.length != module.sectAreas.length)
-				return false;
-			for (int s=0; s<sectAreas.length; s++) {
-				if ((float)sectAreas[s] != (float)module.sectAreas[s])
-					return false;
-			}
-			return true;
-		}
-
 	}
 
 }

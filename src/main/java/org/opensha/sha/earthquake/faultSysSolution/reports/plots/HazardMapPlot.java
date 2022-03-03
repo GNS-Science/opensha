@@ -46,7 +46,7 @@ import com.google.common.base.Preconditions;
 
 public class HazardMapPlot extends AbstractSolutionPlot {
 	
-	public static double SPACING_DEFAULT = 1d;
+	private static double SPACING_DEFAULT = 1d;
 	
 	static {
 		String spacingEnv = System.getenv("FST_HAZARD_SPACING");
@@ -82,11 +82,6 @@ public class HazardMapPlot extends AbstractSolutionPlot {
 	public String getName() {
 		return "Hazard Maps";
 	}
-	
-	// keep track of the the most recent comparison, and reuse if possible (sometimes many plots generated with the
-	// same comparison in succession)
-	private static SolHazardMapCalc prevCompCalc = null;
-	private static FaultSystemSolution prevSol = null;
 
 	@Override
 	public List<String> plot(FaultSystemSolution sol, ReportMetadata meta, File resourcesDir, String relPathToResources,
@@ -117,25 +112,12 @@ public class HazardMapPlot extends AbstractSolutionPlot {
 		if (meta.hasComparisonSol()) {
 			System.out.println("Calculating comparison hazard map...");
 			
-			synchronized (HazardMapPlot.class) {
-				if (prevCompCalc != null && prevSol == meta.comparison.sol)
-					compCalc = prevCompCalc;
-			}
-			if (compCalc == null) {
-				compCalc = new SolHazardMapCalc(meta.comparison.sol, gmpeRef, gridReg, periods);
-				compCalc.setMaxSourceSiteDist(maxDist);
-				
-				compCalc.setXVals(xVals);
-				
-				compCalc.calcHazardCurves(numThreads);
-				
-				synchronized (HazardMapPlot.class) {
-					prevCompCalc = compCalc;
-					prevSol = meta.comparison.sol;
-				}
-			} else {
-				System.out.println("Reusing previous comparison calculator");
-			}
+			compCalc = new SolHazardMapCalc(meta.comparison.sol, gmpeRef, gridReg, periods);
+			compCalc.setMaxSourceSiteDist(maxDist);
+			
+			compCalc.setXVals(xVals);
+			
+			compCalc.calcHazardCurves(numThreads);;
 		}
 		
 		return plot(resourcesDir, relPathToResources, topLink, gridReg, calc, compCalc);

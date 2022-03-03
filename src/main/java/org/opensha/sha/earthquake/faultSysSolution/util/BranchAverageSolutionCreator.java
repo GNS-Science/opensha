@@ -1,25 +1,18 @@
 package org.opensha.sha.earthquake.faultSysSolution.util;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.Options;
 import org.dom4j.Element;
 import org.opensha.commons.data.function.ArbitrarilyDiscretizedFunc;
 import org.opensha.commons.data.function.DiscretizedFunc;
 import org.opensha.commons.geo.Region;
-import org.opensha.commons.logicTree.BranchWeightProvider;
-import org.opensha.commons.logicTree.LogicTree;
 import org.opensha.commons.logicTree.LogicTreeBranch;
 import org.opensha.commons.logicTree.LogicTreeLevel;
 import org.opensha.commons.logicTree.LogicTreeNode;
 import org.opensha.commons.util.FaultUtils;
-import org.opensha.commons.util.FaultUtils.AngleAverager;
 import org.opensha.commons.util.modules.AverageableModule.AveragingAccumulator;
 import org.opensha.commons.util.modules.ModuleContainer;
 import org.opensha.commons.util.modules.OpenSHA_Module;
@@ -31,15 +24,12 @@ import org.opensha.sha.earthquake.faultSysSolution.modules.InfoModule;
 import org.opensha.sha.earthquake.faultSysSolution.modules.ModSectMinMags;
 import org.opensha.sha.earthquake.faultSysSolution.modules.RupMFDsModule;
 import org.opensha.sha.earthquake.faultSysSolution.modules.SlipAlongRuptureModel;
-import org.opensha.sha.earthquake.faultSysSolution.modules.SolutionLogicTree;
-import org.opensha.sha.earthquake.faultSysSolution.modules.SolutionSlipRates;
 import org.opensha.sha.faultSurface.FaultSection;
 import org.opensha.sha.faultSurface.FaultTrace;
 import org.opensha.sha.faultSurface.GeoJSONFaultSection;
 import org.opensha.sha.faultSurface.RuptureSurface;
 
 import com.google.common.base.Preconditions;
-import com.google.common.math.DoubleMath;
 
 import scratch.UCERF3.enumTreeBranches.DeformationModels;
 import scratch.UCERF3.enumTreeBranches.ScalingRelationships;
@@ -58,7 +48,7 @@ public class BranchAverageSolutionCreator {
 	private double[] avgMags = null;
 	private double[] avgAreas = null;
 	private double[] avgLengths = null;
-	private List<AngleAverager> avgRakes = null;
+	private List<List<Double>> avgRakes = null;
 	private List<List<Integer>> sectIndices = null;
 	private List<DiscretizedFunc> rupMFDs = null;
 	
@@ -67,7 +57,7 @@ public class BranchAverageSolutionCreator {
 	private double[] avgSectCoupling = null;
 	private double[] avgSectSlipRates = null;
 	private double[] avgSectSlipRateStdDevs = null;
-	private List<AngleAverager> avgSectRakes = null;
+	private List<List<Double>> avgSectRakes = null;
 	
 //	private List<? extends LogicTreeBranch<?>> branches = getLogicTree().getBranches();
 	
@@ -79,48 +69,24 @@ public class BranchAverageSolutionCreator {
 	
 	private boolean skipRupturesBelowSectMin = true;
 	
-	private boolean accumulatingSlipRates = true;
-	
 	private List<AveragingAccumulator<? extends BranchAverageableModule<?>>> rupSetAvgAccumulators;
 	private List<AveragingAccumulator<? extends BranchAverageableModule<?>>> solAvgAccumulators;
 	
-	private List<Class<? extends OpenSHA_Module>> skipModules = new ArrayList<>();
-	
-	private BranchWeightProvider weightProv;
-	
-	public BranchAverageSolutionCreator(BranchWeightProvider weightProv) {
-		this.weightProv = weightProv;
+	public BranchAverageSolutionCreator() {
+		
 	}
 	
 	public void setSkipRupturesBelowSectMin(boolean skipRupturesBelowSectMin) {
 		this.skipRupturesBelowSectMin = skipRupturesBelowSectMin;
 	}
-	
-	public void skipModule(Class<? extends BranchAverageableModule<?>> clazz) {
-		skipModules.add(clazz);
-		if (SolutionSlipRates.class.isAssignableFrom(clazz))
-			accumulatingSlipRates = false;
-	}
 
-	public synchronized void addSolution(FaultSystemSolution sol, LogicTreeBranch<?> branch) {
-		double weight = weightProv.getWeight(branch);
+	public void addSolution(FaultSystemSolution sol, LogicTreeBranch<?> branch) {
+		double weight = branch.getBranchWeight();
 		weights.add(weight);
 		totWeight += weight;
 		FaultSystemRupSet rupSet = sol.getRupSet();
 		
 		ModSectMinMags modMinMags = rupSet.getModule(ModSectMinMags.class);
-		
-		if (accumulatingSlipRates && !sol.hasModule(SolutionSlipRates.class)) {
-			if (rupSet.hasModule(AveSlipModule.class) && rupSet.hasModule(SlipAlongRuptureModel.class))
-				// add a slip rate module so that actual branch-averaged slip rates are calculated
-				// do this because averaged solutions & averaged slip modules won't result in the same solution
-				// slip rates as averaging the solution slip rates themselves
-				sol.addModule(SolutionSlipRates.calc(sol, rupSet.requireModule(AveSlipModule.class),
-						rupSet.requireModule(SlipAlongRuptureModel.class)));
-			else
-				// don't bother trying to calculate any other slip rates, we don't have them for every branch
-				accumulatingSlipRates = false;
-		}
 		
 		if (avgRates == null) {
 			// first time
@@ -130,7 +96,7 @@ public class BranchAverageSolutionCreator {
 			avgLengths = new double[avgRates.length];
 			avgRakes = new ArrayList<>();
 			for (int r=0; r<rupSet.getNumRuptures(); r++)
-				avgRakes.add(new AngleAverager());
+				avgRakes.add(new ArrayList<>());
 			
 			refRupSet = rupSet;
 			
@@ -140,11 +106,19 @@ public class BranchAverageSolutionCreator {
 			avgSectCoupling = new double[rupSet.getNumSections()];
 			avgSectRakes = new ArrayList<>();
 			for (int s=0; s<rupSet.getNumSections(); s++)
-				avgSectRakes.add(new AngleAverager());
+				avgSectRakes.add(new ArrayList<>());
 			
 			// initialize accumulators
-			rupSetAvgAccumulators = initAccumulators(rupSet);
-			solAvgAccumulators = initAccumulators(sol);
+			rupSetAvgAccumulators = new ArrayList<>();
+			for (OpenSHA_Module module : rupSet.getModulesAssignableTo(BranchAverageableModule.class, true)) {
+				Preconditions.checkState(module instanceof BranchAverageableModule<?>);
+				rupSetAvgAccumulators.add(((BranchAverageableModule<?>)module).averagingAccumulator());
+			}
+			solAvgAccumulators = new ArrayList<>();
+			for (OpenSHA_Module module : sol.getModulesAssignableTo(BranchAverageableModule.class, true)) {
+				Preconditions.checkState(module instanceof BranchAverageableModule<?>);
+				solAvgAccumulators.add(((BranchAverageableModule<?>)module).averagingAccumulator());
+			}
 			
 			combBranch = (LogicTreeBranch<LogicTreeNode>)branch.copy();
 			sectIndices = rupSet.getSectionIndicesForAllRups();
@@ -165,7 +139,7 @@ public class BranchAverageSolutionCreator {
 		}
 		
 		for (int r=0; r<avgRates.length; r++) {
-			avgRakes.get(r).add(rupSet.getAveRakeForRup(r), weight);
+			avgRakes.get(r).add(rupSet.getAveRakeForRup(r));
 			double rate = sol.getRateForRup(r);
 			if (rate == 0d)
 				continue;
@@ -191,7 +165,7 @@ public class BranchAverageSolutionCreator {
 			avgSectSlipRates[s] += sect.getOrigAveSlipRate()*weight;
 			avgSectSlipRateStdDevs[s] += sect.getOrigSlipRateStdDev()*weight;
 			avgSectCoupling[s] += sect.getCouplingCoeff()*weight;
-			avgSectRakes.get(s).add(sect.getAveRake(), weight);
+			avgSectRakes.get(s).add(sect.getAveRake());
 		}
 		
 		// now work on modules
@@ -199,24 +173,7 @@ public class BranchAverageSolutionCreator {
 		processAccumulators(solAvgAccumulators, sol, weight);
 	}
 	
-	private List<AveragingAccumulator<? extends BranchAverageableModule<?>>> initAccumulators(
-			ModuleContainer<OpenSHA_Module> container) {
-		List<AveragingAccumulator<? extends BranchAverageableModule<?>>> accumulators = new ArrayList<>();
-		for (OpenSHA_Module module : container.getModulesAssignableTo(BranchAverageableModule.class, true, skipModules)) {
-			Preconditions.checkState(module instanceof BranchAverageableModule<?>);
-			System.out.println("Building branch-averaging accumulator for: "+module.getName());
-			AveragingAccumulator<? extends BranchAverageableModule<?>> accumulator =
-					((BranchAverageableModule<?>)module).averagingAccumulator();
-			if (accumulator == null) {
-				System.err.println("WARNING: accumulator is null for module "+module.getName()+", skipping averaging");
-				continue;
-			}
-			accumulators.add(accumulator);
-		}
-		return accumulators;
-	}
-	
-	private void processAccumulators(List<AveragingAccumulator<? extends BranchAverageableModule<?>>> accumulators, 
+	private static void processAccumulators(List<AveragingAccumulator<? extends BranchAverageableModule<?>>> accumulators, 
 			ModuleContainer<OpenSHA_Module> container, double weight) {
 		for (int i=accumulators.size(); --i>=0;) {
 			AveragingAccumulator<? extends BranchAverageableModule<?>> accumulator = accumulators.get(i);
@@ -227,9 +184,6 @@ public class BranchAverageSolutionCreator {
 				System.err.println("Error processing accumulator, will no longer average "+accumulator.getType().getName());
 				System.err.flush();
 				accumulators.remove(i);
-				if (accumulatingSlipRates && SolutionSlipRates.class.isAssignableFrom(accumulator.getType()))
-					// stop calculating slip rates
-					accumulatingSlipRates = false;
 			}
 		}
 	}
@@ -275,10 +229,10 @@ public class BranchAverageSolutionCreator {
 				DiscretizedFunc rupMFD = rupMFDs.get(r);
 				rupMFD.scale(1d/totWeight);
 				double calcRate = rupMFD.calcSumOfY_Vals();
-				Preconditions.checkState(DoubleMath.fuzzyEquals(calcRate, avgRates[r], 1e-15),
+				Preconditions.checkState((float)calcRate == (float)avgRates[r],
 						"Rupture MFD rate=%s, avgRate=%s", calcRate, avgRates[r]);
 			}
-			rakes[r] = FaultUtils.getInRakeRange(avgRakes.get(r).getAverage());
+			rakes[r] = FaultUtils.getInRakeRange(FaultUtils.getScaledAngleAverage(avgRakes.get(r), weights));
 		}
 		
 		List<FaultSection> subSects = new ArrayList<>();
@@ -289,7 +243,7 @@ public class BranchAverageSolutionCreator {
 			avgSectCoupling[s] /= totWeight;
 			avgSectSlipRates[s] /= totWeight;
 			avgSectSlipRateStdDevs[s] /= totWeight;
-			double avgRake = FaultUtils.getInRakeRange(avgSectRakes.get(s).getAverage());
+			double avgRake = FaultUtils.getInRakeRange(FaultUtils.getScaledAngleAverage(avgSectRakes.get(s), weights));
 			
 			GeoJSONFaultSection avgSect = new GeoJSONFaultSection(new AvgFaultSection(refSect, avgSectAseis[s],
 					avgSectCoupling[s], avgRake, avgSectSlipRates[s], avgSectSlipRateStdDevs[s]));
@@ -370,7 +324,7 @@ public class BranchAverageSolutionCreator {
 		
 		sol.addModule(new InfoModule(info));
 		return sol;
-	}
+		}
 	
 	private boolean hasAllEqually(Map<LogicTreeNode, Integer> nodeCounts, LogicTreeNode... nodes) {
 		Integer commonCount = null;
@@ -597,113 +551,10 @@ public class BranchAverageSolutionCreator {
 		for (int i=0; i<running.length; i++)
 			running[i] += vals[i]*weight;
 	}
-	
-	private static Options createOptions() {
-		Options ops = new Options();
-		
-		// TODO add documentation
-		
-		ops.addRequiredOption("if", "input-file", true, "Input solution logic tree zip file.");
-		ops.addRequiredOption("of", "output-file", true, "Output branch averaged solution file.");
-		ops.addOption("rt", "restrict-tree", true, "Restrict the logic tree to the given value. Specify values by either "
-				+ "their short name or file prefix. If such a name is ambiguous (applies to multiple branch levels), "
-				+ "excplicitly set the level as <level-short-name>=<value>. Repeat this argument to specify multiple "
-				+ "values (within a single level and/or across multiple levels).");
-		ops.addOption("rw", "reweight", false, "Flag to use current branch weights rather than those when the "
-				+ "simulation was originally run");
-		
-		return ops;
-	}
 
-	public static void main(String[] args) throws IOException {
-		CommandLine cmd = FaultSysTools.parseOptions(createOptions(), args, BranchAverageSolutionCreator.class);
-		
-		File inputFile = new File(cmd.getOptionValue("input-file"));
-		File outputFile = new File(cmd.getOptionValue("output-file"));
-		
-		SolutionLogicTree slt = SolutionLogicTree.load(inputFile);
-		LogicTree<?> tree = slt.getLogicTree();
-		
-		BranchWeightProvider weightProv;
-		if (cmd.hasOption("reweight"))
-			weightProv = new BranchWeightProvider.CurrentWeights();
-		else
-			weightProv = tree.getWeightProvider();
-		BranchAverageSolutionCreator ba = new BranchAverageSolutionCreator(weightProv);
-		
-//		List<LogicTreeNode> restrictTo = new ArrayList<>();
-		List<List<LogicTreeNode>> restrictTos = null;
-		
-		String[] restrictNames = cmd.getOptionValues("restrict-tree");
-		if (restrictNames != null && restrictNames.length > 0) {
-			restrictTos = new ArrayList<>();
-			for (int i=0; i<tree.getLevels().size(); i++)
-				restrictTos.add(new ArrayList<>());
-			for (String op : restrictNames) {
-				String valName = op;
-				String levelName = null;
-				if (op.contains("=")) {
-					levelName = op.substring(0, op.indexOf('=')).trim();
-					valName = op.substring(op.indexOf('=')+1).trim();
-					System.out.println("Looking for logic tree level with name '"+levelName+"', value of '"+valName+"'");
-				} else {
-					System.out.println("Looking for logic tree value of '"+valName+"'");
-				}
-				LogicTreeNode match = null;
-				for (int i=0; i<tree.getLevels().size(); i++) {
-					LogicTreeLevel<?> level = tree.getLevels().get(i);
-					if (levelName != null && !level.getShortName().equals(levelName))
-						continue;
-					for (LogicTreeNode value : level.getNodes()) {
-//						System.out.println("Testing value="+value+" with prefix="+value.getFilePrefix());
-						if (value.getShortName().equals(valName) || value.getFilePrefix().equals(valName)) {
-							if (match == null) {
-								System.out.println("Found matching node: "+value);
-								match = value;
-								restrictTos.get(i).add(value);
-							} else {
-								throw new IllegalStateException("Logic tree value '"+valName+"' is ambiguous (matches "
-										+ "multiple values across multiple levels). Specify the appropriate level as "
-										+ "--restrict-tree <level-short-name>=<value>.");
-							}
-						}
-					}
-				}
-				Preconditions.checkNotNull(match, "Didn't find matching logic tree value='%s' (level='%s')",
-						valName, levelName);
-			}
-		}
-		
-		for (LogicTreeBranch<?> branch : slt.getLogicTree()) {
-			if (restrictTos != null) {
-				Preconditions.checkState(branch.size() == tree.getLevels().size());
-				boolean hasAll = true;
-				for (int i=0; i<branch.size(); i++) {
-					List<LogicTreeNode> restrictTo = restrictTos.get(i);
-					if (restrictTo.isEmpty())
-						continue;
-					boolean match = false;
-					for (LogicTreeNode restrict : restrictTo)
-						if (branch.hasValue(restrict))
-							match = true;
-					if (!match) {
-						hasAll = false;
-						break;
-					}
-				}
-				if (!hasAll) {
-					System.out.println("Skipping branch: "+branch);
-					continue;
-				}
-			}
-			FaultSystemSolution sol = slt.forBranch(branch);
-			
-			ba.addSolution(sol, branch);
-		}
-		
-		System.out.println("Building final branch-averaged solution.");
-		FaultSystemSolution baSol = ba.build();
-		baSol.write(outputFile);
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+
 	}
 
 }

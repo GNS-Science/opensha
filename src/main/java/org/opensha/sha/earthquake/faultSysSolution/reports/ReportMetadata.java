@@ -4,8 +4,6 @@ import java.util.HashSet;
 
 import org.opensha.commons.data.region.CaliforniaRegions;
 import org.opensha.commons.geo.Region;
-import org.opensha.sha.earthquake.faultSysSolution.FaultSystemRupSet;
-import org.opensha.sha.earthquake.faultSysSolution.FaultSystemSolution;
 import org.opensha.sha.earthquake.faultSysSolution.modules.FaultGridAssociations;
 import org.opensha.sha.earthquake.faultSysSolution.modules.GridSourceProvider;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.Jump;
@@ -40,34 +38,22 @@ public class ReportMetadata {
 		}
 		
 		// look for a reagion
-		Region region = detectRegion(primary);
+		Region region = findRegion(primary);
 		if (region == null && comparison != null)
-			region = detectRegion(comparison);
+			region = findRegion(comparison);
 		if (region == null)
 			// just use bounding box
 			region = RupSetMapMaker.buildBufferedRegion(primary.rupSet.getFaultSectionDataList());
 		this.region = region;
 	}
 	
-	public static Region detectRegion(RupSetMetadata meta) {
-		return detectRegion(meta.rupSet, meta.sol);
-	}
-	
-	public static Region detectRegion(FaultSystemRupSet rupSet) {
-		return detectRegion(rupSet, null);
-	}
-	
-	public static Region detectRegion(FaultSystemSolution sol) {
-		return detectRegion(sol.getRupSet(), sol);
-	}
-	
-	private static Region detectRegion(FaultSystemRupSet rupSet, FaultSystemSolution sol) {
-		if (ReportPageGen.getUCERF3FM(rupSet) != null)
+	private Region findRegion(RupSetMetadata meta) {
+		if (ReportPageGen.getUCERF3FM(meta.rupSet) != null)
 			return new CaliforniaRegions.RELM_TESTING();
-		if (rupSet.hasModule(FaultGridAssociations.class))
-			return new Region(rupSet.getModule(FaultGridAssociations.class).getRegion());
-		if (sol != null && sol.hasModule(GridSourceProvider.class))
-			return new Region(sol.getModule(GridSourceProvider.class).getGriddedRegion());
+		if (meta.rupSet.hasModule(FaultGridAssociations.class))
+			return new Region(meta.rupSet.getModule(FaultGridAssociations.class).getRegion());
+		if (meta.sol != null && meta.sol.hasModule(GridSourceProvider.class))
+			return new Region(meta.sol.getModule(GridSourceProvider.class).getGriddedRegion());
 		return null;
 	}
 	

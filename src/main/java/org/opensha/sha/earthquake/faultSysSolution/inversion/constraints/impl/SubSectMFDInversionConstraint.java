@@ -44,13 +44,10 @@ public class SubSectMFDInversionConstraint extends InversionConstraint {
 	public int getNumRows() {
 		int numRows = 0;
 		for (IncrementalMagFreqDist constraint : constraints)
-			if (constraint != null) {
-				EvenlyDiscretizedFunc stdDevs = weightingType == ConstraintWeightingType.NORMALIZED_BY_UNCERTAINTY ?
-						((UncertainIncrMagFreqDist)constraint).getStdDevs() : null;
+			if (constraint != null)
 				for (int i=0; i<constraint.size(); i++)
-					if (constraint.getY(i) > 0 || (stdDevs != null && stdDevs.getY(i) > 0))
+					if (constraint.getY(i) > 0)
 						numRows++;
-			}
 		return numRows;
 	}
 
@@ -80,9 +77,10 @@ public class SubSectMFDInversionConstraint extends InversionConstraint {
 			// Loop over MFD constraints for this subsection
 			for (int magBin=0; magBin<numMagBins; magBin++) {
 				double rate = constraint.getY(magBin);
-				double stdDev = stdDevs == null ? Double.NaN : stdDevs.getY(magBin);
 				// Only include non-empty magBins in constraint
-				if (rate > 0 || (stdDevs != null && stdDev > 0)) {
+				if (rate > 0) {
+					double stdDev = stdDevs == null ? Double.NaN : stdDevs.getY(magBin);
+					
 					double scalar = weightingType.getA_Scalar(rate, stdDev);
 					
 					// Determine which ruptures are in this magBin

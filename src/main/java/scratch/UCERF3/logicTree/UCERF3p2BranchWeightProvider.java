@@ -1,15 +1,11 @@
 package scratch.UCERF3.logicTree;
 
-import org.opensha.commons.logicTree.LogicTreeBranch;
-
-import com.google.common.base.Preconditions;
-
 import scratch.UCERF3.enumTreeBranches.DeformationModels;
 import scratch.UCERF3.enumTreeBranches.InversionModels;
 import scratch.UCERF3.enumTreeBranches.MaxMagOffFault;
 import scratch.UCERF3.enumTreeBranches.TotalMag5Rate;
 
-public class UCERF3p2BranchWeightProvider implements U3BranchWeightProvider {
+public class UCERF3p2BranchWeightProvider implements BranchWeightProvider {
 
 	@Override
 	public double getWeight(U3LogicTreeBranch branch) {
@@ -76,12 +72,6 @@ public class UCERF3p2BranchWeightProvider implements U3BranchWeightProvider {
 			wt *= subWt;
 		}
 		return wt;
-	}
-	
-	@Override
-	public double getWeight(LogicTreeBranch<?> branch) {
-		Preconditions.checkState(branch instanceof U3LogicTreeBranch);
-		return getWeight((U3LogicTreeBranch)branch);
 	}
 
 }

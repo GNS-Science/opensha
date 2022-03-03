@@ -1,9 +1,11 @@
 package org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion;
 
-import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.InversionState;
-import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.CompletionCriteria.EstimationCompletionCriteria;
+import java.util.List;
 
-public class IterationCompletionCriteria implements EstimationCompletionCriteria {
+import org.apache.commons.lang3.time.StopWatch;
+import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.ConstraintRange;
+
+public class IterationCompletionCriteria implements CompletionCriteria {
 	
 	private long minIterations;
 	
@@ -18,8 +20,8 @@ public class IterationCompletionCriteria implements EstimationCompletionCriteria
 	}
 
 	@Override
-	public boolean isSatisfied(InversionState state) {
-		return state.iterations >= minIterations;
+	public boolean isSatisfied(StopWatch watch, long iter, double[] energy, long numPerturbsKept, int numNonZero, double[] misfits, double[] misfits_ineq, List<ConstraintRange> constraintRanges) {
+		return iter >= minIterations;
 	}
 	
 	@Override
@@ -29,11 +31,6 @@ public class IterationCompletionCriteria implements EstimationCompletionCriteria
 	
 	public long getMinIterations() {
 		return minIterations;
-	}
-
-	@Override
-	public double estimateFractCompleted(InversionState state) {
-		return Math.min(1d, (double)state.iterations/(double)minIterations);
 	}
 
 }

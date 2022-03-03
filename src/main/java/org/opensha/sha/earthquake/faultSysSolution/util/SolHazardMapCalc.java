@@ -9,7 +9,6 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.function.Supplier;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -67,7 +66,7 @@ import scratch.UCERF3.erf.FaultSystemSolutionERF;
 public class SolHazardMapCalc {
 	
 	private FaultSystemSolution sol;
-	private Supplier<ScalarIMR> gmpeRef;
+	private AttenRelRef gmpeRef;
 	private GriddedRegion region;
 	private double[] periods;
 	
@@ -102,13 +101,7 @@ public class SolHazardMapCalc {
 		}
 	}
 
-	public SolHazardMapCalc(FaultSystemSolution sol, Supplier<ScalarIMR> gmpeRef, GriddedRegion region,
-			double... periods) {
-		this(sol, gmpeRef, region, IncludeBackgroundOption.EXCLUDE, periods);
-	}
-
-	public SolHazardMapCalc(FaultSystemSolution sol, Supplier<ScalarIMR> gmpeRef, GriddedRegion region,
-			IncludeBackgroundOption backSeisOption, double... periods) {
+	public SolHazardMapCalc(FaultSystemSolution sol, AttenRelRef gmpeRef, GriddedRegion region, double... periods) {
 		this.sol = sol;
 		this.gmpeRef = gmpeRef;
 		this.region = region;
@@ -120,7 +113,8 @@ public class SolHazardMapCalc {
 		
 		if (gmpeRef != null) {
 			sites = new ArrayList<>();
-			ScalarIMR gmpe = gmpeRef.get();
+			ScalarIMR gmpe = gmpeRef.instance(null);
+			gmpe.setParamDefaults();
 			for (Location loc : region.getNodeList()) {
 				Site site = new Site(loc);
 				for (Parameter<?> param : gmpe.getSiteParams())
@@ -130,7 +124,7 @@ public class SolHazardMapCalc {
 			
 			fssERF = new FaultSystemSolutionERF(sol);
 			fssERF.setParameter(ProbabilityModelParam.NAME, ProbabilityModelOptions.POISSON);
-			fssERF.setParameter(IncludeBackgroundParam.NAME, backSeisOption);
+			fssERF.setParameter(IncludeBackgroundParam.NAME, IncludeBackgroundOption.EXCLUDE);
 			fssERF.getTimeSpan().setDuration(1d);
 			
 			fssERF.updateForecast();
@@ -266,7 +260,8 @@ public class SolHazardMapCalc {
 
 		@Override
 		public void run() {
-			ScalarIMR gmpe = gmpeRef.get();
+			ScalarIMR gmpe = gmpeRef.instance(null);
+			gmpe.setParamDefaults();
 			
 			HazardCurveCalculator calc = new HazardCurveCalculator();
 			calc.setMaxSourceDistance(maxSiteDist);

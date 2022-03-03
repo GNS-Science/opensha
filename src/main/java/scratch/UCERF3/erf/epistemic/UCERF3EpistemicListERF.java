@@ -46,7 +46,7 @@ import org.opensha.sha.util.TectonicRegionType;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 
-import scratch.UCERF3.U3CompoundFaultSystemSolution;
+import scratch.UCERF3.CompoundFaultSystemSolution;
 import scratch.UCERF3.enumTreeBranches.DeformationModels;
 import scratch.UCERF3.enumTreeBranches.FaultModels;
 import scratch.UCERF3.enumTreeBranches.ScalingRelationships;
@@ -292,7 +292,7 @@ public class UCERF3EpistemicListERF implements EpistemicListERF, ParameterChange
 	@Override
 	public double getERF_RelativeWeight(int index) {
 		updateBranches();
-		return tree.getBranchWeight(branches.get(index));
+		return branches.get(index).getBranchWeight();
 	}
 
 	@Override
@@ -300,7 +300,7 @@ public class UCERF3EpistemicListERF implements EpistemicListERF, ParameterChange
 		updateBranches();
 		ArrayList<Double> weights = new ArrayList<>();
 		for (LogicTreeBranch<?> branch : branches)
-			weights.add(tree.getBranchWeight(branch));
+			weights.add(branch.getBranchWeight());
 		return weights;
 	}
 

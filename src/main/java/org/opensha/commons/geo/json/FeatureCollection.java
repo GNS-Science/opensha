@@ -11,7 +11,6 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import org.opensha.commons.geo.json.Feature.FeatureAdapter;
@@ -38,7 +37,7 @@ import com.google.gson.stream.JsonWriter;
  *
  */
 @JsonAdapter(FeatureCollection.FeatureCollectionAdapter.class)
-public class FeatureCollection implements Iterable<Feature> {
+public class FeatureCollection {
 	
 	public final GeoJSON_Type type = GeoJSON_Type.FeatureCollection;
 	
@@ -244,11 +243,6 @@ public class FeatureCollection implements Iterable<Feature> {
 		builder.registerTypeAdapter(FeatureProperties.class, propsAdapter);
 		builder.registerTypeAdapter(Geometry.class, geomAdapter);
 		return builder.create();
-	}
-
-	@Override
-	public Iterator<Feature> iterator() {
-		return features.iterator();
 	}
 
 }

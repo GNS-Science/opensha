@@ -22,19 +22,9 @@ import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.SectionDistance
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.SegmentationCalculator;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.SegmentationCalculator.Scalars;
 
-import com.google.common.base.Preconditions;
-
 public class SegmentationPlot extends AbstractSolutionPlot {
 	
-	private boolean skipCoulomb;
-	
-	public SegmentationPlot() {
-		this(true);
-	}
-	
-	public SegmentationPlot(boolean skipCoulomb) {
-		this.skipCoulomb = skipCoulomb;
-	}
+	private boolean skipCoulomb = true;
 
 	@Override
 	public String getName() {
@@ -77,29 +67,21 @@ public class SegmentationPlot extends AbstractSolutionPlot {
 		String compName = meta.comparison == null ? null : meta.comparison.name;
 		if (inputSegCalc.areMultipleJumpsPerParent() || compSegCalc != null && compSegCalc.areMultipleJumpsPerParent()) {
 			String names = null;
-			if (inputSegCalc.areMultipleJumpsPerParent() &&
-					// only combine jumps if this was an externally generated rupture set
-					(inputConfig.getFilters() == null || inputConfig.getFilters().isEmpty())) {
+			if (inputSegCalc.areMultipleJumpsPerParent()) {
 				names = meta.primary.name;
 				inputSegCalc = inputSegCalc.combineMultiJumps(true);
 			}
 			if (compSegCalc != null && compSegCalc.areMultipleJumpsPerParent()) {
-				PlausibilityConfiguration compConfig = meta.comparison.rupSet.requireModule(PlausibilityConfiguration.class);
-				if (compConfig.getFilters() == null || compConfig.getFilters().isEmpty()) {
-					// only combine jumps if this was an externally generated rupture set
-					if (names == null)
-						names = compName;
-					else
-						names = "both "+names+" and "+compName;
-					compSegCalc = compSegCalc.combineMultiJumps(true);
-				}
+				if (names == null)
+					names = compName;
+				else
+					names = "both "+names+" and "+compName;
+				compSegCalc = compSegCalc.combineMultiJumps(true);
 			}
-			if (names != null) {
-				lines.add("NOTE: "+names+" has multiple jumping points between parent sections. We consolidate "
-						+ "all jumps to occur at a single jumping point (with the highest jumping rate) and average "
-						+ "quantities on either side of the jump (participation/slip rates)");
-				lines.add("");
-			}
+			lines.add("NOTE: "+names+" has multiple jumping points between parent sections. We consolidate "
+					+ "all jumps to occur at a single jumping point (with the highest jumping rate) and average "
+					+ "quantities on either side of the jump (participation/slip rates)");
+			lines.add("");
 		}
 		
 //		RateCombiner[] combiners = RateCombiner.values();
@@ -121,15 +103,10 @@ public class SegmentationPlot extends AbstractSolutionPlot {
 		
 		Map<RateCombiner, File[]> shawComps = new HashMap<>();
 		Map<RateCombiner, File[]> shawLogComps = new HashMap<>();
-		File[] shawCompComps = null, shawLogCompComps = null;
 		for (RateCombiner combiner : combiners) {
 			shawComps.put(combiner, inputSegCalc.plotShaw07Comparison(resourcesDir, "conn_passthrough_shaw07", false, combiner));
 			shawLogComps.put(combiner, inputSegCalc.plotShaw07Comparison(resourcesDir, "conn_passthrough_shaw07_log", true, combiner));
-			if (combiners.length == 1 && compSegCalc != null) {
-				shawCompComps = compSegCalc.plotShaw07Comparison(resourcesDir, "conn_comp_passthrough_shaw07", false, combiners[0]);
-				shawLogCompComps = compSegCalc.plotShaw07Comparison(resourcesDir, "conn_comp_passthrough_shaw07_log", true, combiners[0]);
-			}
-		}		
+		}
 		
 		Map<Scalars, File[]> inputScalarPassthroughs = new HashMap<>();
 		Map<Scalars, File[]> inputScalarLogPassthroughs = new HashMap<>();
@@ -142,23 +119,14 @@ public class SegmentationPlot extends AbstractSolutionPlot {
 		
 		File[] compConnRates = null;
 		Map<RateCombiner, File[]> compPassthroughRates = null;
-		Map<RateCombiner, File[]> compPassthroughRatios = null;
-		Map<RateCombiner, File[]> compPassthroughDiffs = null;
 		Map<Scalars, File[]> compScalarPassthroughs = null;
 		Map<Scalars, File[]> compScalarLogPassthroughs = null;
 		if (compSegCalc != null) {
 			compConnRates = compSegCalc.plotConnectionRates(resourcesDir, "comp_conn_rates", compName);
 			compPassthroughRates = new HashMap<>();
-			compPassthroughDiffs = new HashMap<>();
-			compPassthroughRatios = new HashMap<>();
-			for (RateCombiner combiner : combiners) {
+			for (RateCombiner combiner : combiners)
 				compPassthroughRates.put(combiner, compSegCalc.plotConnectionFracts(resourcesDir,
 						"comp_conn_passthrough_"+combiner.name(), "Connection Passthrough Rates, Relative to "+combiner, combiner));
-				compPassthroughDiffs.put(combiner, inputSegCalc.plotConnectionDiffs(resourcesDir,
-						"conn_passthrough_diff_"+combiner.name(), "Connection Passthrough Differences", combiner, compSegCalc));
-				compPassthroughRatios.put(combiner, inputSegCalc.plotConnectionLogRatios(resourcesDir,
-						"conn_passthrough_ratio_"+combiner.name(), "Connection Passthrough Ratios", combiner, compSegCalc));
-			}
 			compScalarPassthroughs = new HashMap<>();
 			compScalarLogPassthroughs = new HashMap<>();
 			for (Scalars scalar : scalars) {
@@ -209,21 +177,16 @@ public class SegmentationPlot extends AbstractSolutionPlot {
 			for (RateCombiner combiner : combiners) {
 				table.initNewLine();
 				table.addColumn("![Rates]("+relPathToResources+"/"+inputPassthroughRates.get(combiner)[m].getName()+")");
-				if (compSegCalc != null) {
+				if (compSegCalc != null)
 					table.addColumn("![Rates]("+relPathToResources+"/"+compPassthroughRates.get(combiner)[m].getName()+")");
-					table.finalizeLine();
-					table.initNewLine();
-					table.addColumn("![Rates]("+relPathToResources+"/"+compPassthroughRatios.get(combiner)[m].getName()+")");
-					table.addColumn("![Rates]("+relPathToResources+"/"+compPassthroughDiffs.get(combiner)[m].getName()+")");
-				}
 				table.finalizeLine();
 			}
 			lines.addAll(table.build());
 			lines.add("");
 			
-			lines.add("**Connection Passthrough Rates vs Shaw & Dieterich (2007)**");
+			lines.add("**Connection Passthrough Rates vs Shaw 2007**");
 			lines.add(""); lines.add(topLink); lines.add("");
-			lines.add("This plots passthrough rates versus various the distance relationship established in Shaw and Dieterich (2007).");
+			lines.add("This plots passthrough rates versus various the distance relationship established in Shaw (2007).");
 			lines.add("");
 			
 			table = MarkdownUtils.tableBuilder();
@@ -234,33 +197,8 @@ public class SegmentationPlot extends AbstractSolutionPlot {
 				table.addColumn("![Rates]("+relPathToResources+"/"+shawLogComps.get(combiner)[m].getName()+")");
 				table.finalizeLine();
 			}
-			if (combiners.length == 1 && compSegCalc != null) {
-				// do comparison
-				table.addLine(MarkdownUtils.boldCentered("Comparison Linear"), MarkdownUtils.boldCentered("Comparison Log10"));
-				table.initNewLine();
-				table.addColumn("![Rates]("+relPathToResources+"/"+shawCompComps[m].getName()+")");
-				table.addColumn("![Rates]("+relPathToResources+"/"+shawLogCompComps[m].getName()+")");
-				table.finalizeLine();
-			}
 			lines.addAll(table.build());
 			lines.add("");
-			
-			if (combiners.length == 1) {
-				File csvFile = shawComps.get(combiners[0])[m];
-				csvFile = new File(csvFile.getParentFile(), csvFile.getName().replaceAll(".png", ".csv"));
-				Preconditions.checkState(csvFile.exists());
-				
-				if (compSegCalc == null) {
-					lines.add("Download CSV file: ["+csvFile.getName()+"]("+relPathToResources+"/"+csvFile.getName()+")");
-				} else {
-					File csvCompFile = shawCompComps[m];
-					csvCompFile = new File(csvCompFile.getParentFile(), csvCompFile.getName().replaceAll(".png", ".csv"));
-					Preconditions.checkState(csvCompFile.exists());
-					lines.add("Download CSV files: ["+meta.primary.name+"]("+relPathToResources+"/"+csvFile.getName()
-						+") ["+meta.comparison.name+"]("+relPathToResources+"/"+csvCompFile.getName()+")");
-				}
-				lines.add("");
-			}
 			
 			lines.add("**Connection Passthrough Rates vs Scalars**");
 			lines.add(""); lines.add(topLink); lines.add("");

@@ -5,12 +5,16 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.lang3.time.StopWatch;
+import org.opensha.commons.data.CSVFile;
 import org.opensha.commons.data.function.ArbitrarilyDiscretizedFunc;
-import org.opensha.commons.gui.plot.GraphWindow;
 import org.opensha.commons.gui.plot.PlotCurveCharacterstics;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.ConstraintRange;
-import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.InversionState;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.SimulatedAnnealing;
+import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.ThreadedSimulatedAnnealing;
+import org.opensha.commons.gui.plot.GraphWindow;
+
+import com.google.common.collect.Lists;
 
 public class ProgressTrackingCompletionCriteria implements CompletionCriteria {
 	
@@ -65,24 +69,24 @@ public class ProgressTrackingCompletionCriteria implements CompletionCriteria {
 	}
 
 	@Override
-	public boolean isSatisfied(InversionState state) {
+	public boolean isSatisfied(StopWatch watch, long iter, double[] energy, long numPerturbsKept, int numNonZero, double[] misfits, double[] misfits_ineq, List<ConstraintRange> constraintRanges) {
 		if (progress == null)
 			progress = AnnealingProgress.forConstraintRanges(constraintRanges);
-		if (state.energy[0] < Double.MAX_VALUE && (iterMod <= 0 || state.iterations % iterMod == 0l))
-			progress.addProgress(state);
-		if (autoPlotMillis > 0 && state.elapsedTimeMillis > nextPlotMillis) {
+		if (energy[0] < Double.MAX_VALUE && (iterMod <= 0 || iter % iterMod == 0l))
+			progress.addProgress(iter, watch.getTime(), numPerturbsKept, energy, numNonZero);
+		if (autoPlotMillis > 0 && watch.getTime() > nextPlotMillis) {
 			try {
 				updatePlot();
 			} catch (Throwable t) {
 				// you never want a plot error to stop an inversion!
 				t.printStackTrace();
 			}
-			nextPlotMillis = state.elapsedTimeMillis + autoPlotMillis;
+			nextPlotMillis = watch.getTime() + autoPlotMillis;
 		}
-		if (criteria.isSatisfied(state)) {
+		if (criteria.isSatisfied(watch, iter, energy, numPerturbsKept, numNonZero, misfits, misfits_ineq, constraintRanges)) {
 			if (automaticFile != null) {
-				System.out.println("Criteria satisfied with time="+(state.elapsedTimeMillis/60000f)
-						+" min, iter="+state.iterations+", energy="+state.energy[0]+", pertubs kept="+state.numPerturbsKept);
+				System.out.println("Criteria satisfied with time="+(watch.getTime()/60000f)
+						+" min, iter="+iter+", energy="+energy[0]+", pertubs kept="+numPerturbsKept);
 				System.out.println("Writing progress to file: "+automaticFile.getAbsolutePath());
 				// write out results first
 				try {

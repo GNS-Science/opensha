@@ -1,6 +1,5 @@
 package org.opensha.commons.logicTree;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
@@ -10,7 +9,6 @@ import java.util.List;
 import org.opensha.commons.data.ShortNamed;
 import org.opensha.commons.logicTree.Affects.Affected;
 import org.opensha.commons.logicTree.DoesNotAffect.NotAffected;
-import org.opensha.commons.logicTree.LogicTreeBranch.NodeTypeAdapter;
 import org.opensha.commons.logicTree.LogicTreeNode.FileBackedNode;
 import org.opensha.sha.earthquake.faultSysSolution.modules.SolutionLogicTree;
 
@@ -424,18 +422,6 @@ public abstract class LogicTreeLevel<E extends LogicTreeNode> implements ShortNa
 	}
 	
 	public static class Adapter<E extends LogicTreeNode> extends TypeAdapter<LogicTreeLevel<? extends E>> {
-		
-		private boolean writeNodes;
-		private NodeTypeAdapter nodeAdapter;
-
-		public Adapter() {
-			this(true);
-		}
-		
-		public Adapter(boolean writeNodes) {
-			this.writeNodes = writeNodes;
-			nodeAdapter = new NodeTypeAdapter(null);
-		}
 
 		@Override
 		public void write(JsonWriter out, LogicTreeLevel<? extends E> level) throws IOException {
@@ -463,12 +449,6 @@ public abstract class LogicTreeLevel<E extends LogicTreeNode> implements ShortNa
 					out.value(name);
 				out.endArray();
 			}
-			if (writeNodes) {
-				out.name("nodes").beginArray();;
-				for (LogicTreeNode node : level.getNodes())
-					nodeAdapter.write(out, node);
-				out.endArray();
-			}
 			out.endObject();
 		}
 
@@ -481,7 +461,6 @@ public abstract class LogicTreeLevel<E extends LogicTreeNode> implements ShortNa
 			String className = null;
 			List<String> affected = new ArrayList<>();
 			List<String> notAffected = new ArrayList<>();
-			List<LogicTreeNode> nodes = new ArrayList<>();
 			in.beginObject();
 			
 			while (in.hasNext()) {
@@ -508,12 +487,6 @@ public abstract class LogicTreeLevel<E extends LogicTreeNode> implements ShortNa
 					in.beginArray();
 					while (in.hasNext())
 						notAffected.add(in.nextString());
-					in.endArray();
-					break;
-				case "nodes":
-					in.beginArray();
-					while (in.hasNext())
-						nodes.add(nodeAdapter.read(in));
 					in.endArray();
 					break;
 
@@ -564,28 +537,12 @@ public abstract class LogicTreeLevel<E extends LogicTreeNode> implements ShortNa
 				fileLevel.affected = affected;
 				fileLevel.notAffected = notAffected;
 				level = (LogicTreeLevel<E>) fileLevel;
-				if (nodes != null) {
-					for (LogicTreeNode node : nodes) {
-						FileBackedNode fileNode;
-						if (node instanceof FileBackedNode)
-							fileNode = (FileBackedNode)node;
-						else
-							fileNode = new FileBackedNode(node.getName(), node.getShortName(),
-									node.getNodeWeight(null), node.getFilePrefix());
-						fileLevel.addChoice(fileNode);
-					}
-				}
 			}
 			
 			in.endObject();
 			return level;
 		}
 		
-	}
-	
-	public static void main(String[] args) throws IOException {
-		LogicTree.read(new File("/home/kevin/OpenSHA/UCERF4/batch_inversions/"
-				+ "2021_12_14-nshm23_draft_branches-coulomb-ineq-FM3_1-ZENGBB-Shaw09Mod-TotNuclRate-SubB1/logic_tree.json"));
 	}
 
 }

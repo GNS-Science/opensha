@@ -131,7 +131,7 @@ import com.google.common.collect.Table.Cell;
 import com.google.common.io.Files;
 import com.google.common.primitives.Doubles;
 
-import scratch.UCERF3.U3FaultSystemSolutionFetcher;
+import scratch.UCERF3.FaultSystemSolutionFetcher;
 import scratch.UCERF3.analysis.CompoundFSSPlots.MapBasedPlot;
 import scratch.UCERF3.analysis.CompoundFSSPlots.MapPlotData;
 import scratch.UCERF3.enumTreeBranches.DeformationModels;
@@ -150,8 +150,8 @@ import scratch.UCERF3.inversion.CommandLineInversionRunner;
 import scratch.UCERF3.inversion.InversionFaultSystemRupSet;
 import scratch.UCERF3.inversion.InversionFaultSystemSolution;
 import scratch.UCERF3.inversion.U3InversionTargetMFDs;
-import scratch.UCERF3.logicTree.U3APrioriBranchWeightProvider;
-import scratch.UCERF3.logicTree.U3BranchWeightProvider;
+import scratch.UCERF3.logicTree.APrioriBranchWeightProvider;
+import scratch.UCERF3.logicTree.BranchWeightProvider;
 import scratch.UCERF3.logicTree.U3LogicTreeBranch;
 import scratch.UCERF3.logicTree.U3LogicTreeBranchNode;
 import scratch.UCERF3.utils.DeformationModelFetcher;
@@ -3050,7 +3050,7 @@ public class FaultSysSolutionERF_Calc {
 					subSectsForParent.add(sect);
 				}
 				
-				List<? extends FaultSection> parentSects = fm.getFaultSections();
+				List<? extends FaultSection> parentSects = fm.fetchFaultSections();
 				Collections.sort(parentSects, new NamedComparator());
 				for (int i = 0; i < parentSects.size(); i++) {
 					FaultSection sect = parentSects.get(i);
@@ -3131,7 +3131,7 @@ public class FaultSysSolutionERF_Calc {
 		
 		System.out.println(tracesSet.size()+" unique sects");
 		
-		U3BranchWeightProvider weightProv = new U3APrioriBranchWeightProvider();
+		BranchWeightProvider weightProv = new APrioriBranchWeightProvider();
 		
 		// aggregated CSV file
 		CSVFile<String> csv = new CSVFile<String>(true);
@@ -3203,7 +3203,7 @@ public class FaultSysSolutionERF_Calc {
 					fmMeanTimeDep = new double[fmSubSectIndexMap.row(fm).size()];
 					fmMeanTimeDepVals.put(fm, fmMeanTimeDep);
 				}
-				fmMeanTimeDep[subSectIndex] = U3FaultSystemSolutionFetcher.calcScaledAverage(
+				fmMeanTimeDep[subSectIndex] = FaultSystemSolutionFetcher.calcScaledAverage(
 						fmTimeDepValsArray, fmWeightsArray);
 			}
 			double[] poisValsArray = Doubles.toArray(poisVals);
@@ -3236,11 +3236,11 @@ public class FaultSysSolutionERF_Calc {
 //			double minBPT = minNonZero(bptVals);
 //			double maxBPT = maxNonZero(bptVals);
 //			double meanPois = weightedAvgNonZero(poisVals, weights);
-			double meanTimeDep = U3FaultSystemSolutionFetcher.calcScaledAverage(
+			double meanTimeDep = FaultSystemSolutionFetcher.calcScaledAverage(
 					timeDepValsArray, weightsArray);
 			double minTimeDep = StatUtils.min(timeDepAllValsArray);
 			double maxTimeDep = StatUtils.max(timeDepAllValsArray);
-			double meanPois = U3FaultSystemSolutionFetcher.calcScaledAverage(
+			double meanPois = FaultSystemSolutionFetcher.calcScaledAverage(
 					poisValsArray, weightsArray);
 			double gainU3 = weightedAvgNonZero(gainVals, weights);
 			
@@ -3308,7 +3308,7 @@ public class FaultSysSolutionERF_Calc {
 						if (cell.getRowKey() != theCOV)
 							continue;
 						double[] bptCOV_ValsArray = Doubles.toArray(cell.getValue());
-						avgVals.add(U3FaultSystemSolutionFetcher.calcScaledAverage(
+						avgVals.add(FaultSystemSolutionFetcher.calcScaledAverage(
 							bptCOV_ValsArray, weightsArray));
 					}
 					Preconditions.checkState(!avgVals.isEmpty());
@@ -3326,7 +3326,7 @@ public class FaultSysSolutionERF_Calc {
 						branchPoisVals.add(val.pPois);
 					}
 					
-					meanBPT_COVVals.get(null)[i] = U3FaultSystemSolutionFetcher.calcScaledAverage(
+					meanBPT_COVVals.get(null)[i] = FaultSystemSolutionFetcher.calcScaledAverage(
 							Doubles.toArray(branchPoisVals), weightsArray);
 				}
 			}
@@ -3340,7 +3340,7 @@ public class FaultSysSolutionERF_Calc {
 						if (cell.getColumnKey() != theAve)
 							continue;
 						double[] bptCOV_ValsArray = Doubles.toArray(cell.getValue());
-						avgVals.add(U3FaultSystemSolutionFetcher.calcScaledAverage(
+						avgVals.add(FaultSystemSolutionFetcher.calcScaledAverage(
 							bptCOV_ValsArray, weightsArray));
 						if (isWeightedMultiCOV)
 							cellWeights.add(FaultSystemSolutionERF.getWeightForCOV(cell.getRowKey()));
@@ -3355,7 +3355,7 @@ public class FaultSysSolutionERF_Calc {
 						Preconditions.checkState(cellWeights.size() == 4);
 					}
 					
-					double mean = U3FaultSystemSolutionFetcher.calcScaledAverage(
+					double mean = FaultSystemSolutionFetcher.calcScaledAverage(
 							Doubles.toArray(avgVals), Doubles.toArray(cellWeights));
 					Preconditions.checkState(!avgVals.isEmpty());
 					meanBPT_CalcVals.get(theAve)[i] = mean;
@@ -3869,7 +3869,7 @@ public class FaultSysSolutionERF_Calc {
 				UCERF3_DataUtils.getReader("FaultModels", "MainFaultsForTimeDepComparison.txt")).keySet());
 		Collections.sort(faultNames);
 		
-		U3BranchWeightProvider weightProv = new U3APrioriBranchWeightProvider();
+		BranchWeightProvider weightProv = new APrioriBranchWeightProvider();
 		
 		for (int i = 0; i < faultNames.size(); i++) {
 			String name = faultNames.get(i);
@@ -3921,11 +3921,11 @@ public class FaultSysSolutionERF_Calc {
 //			double minBPT = minNonZero(bptVals);
 //			double maxBPT = maxNonZero(bptVals);
 //			double meanPois = weightedAvgNonZero(poisVals, weights);
-			double meanBPT = U3FaultSystemSolutionFetcher.calcScaledAverage(
+			double meanBPT = FaultSystemSolutionFetcher.calcScaledAverage(
 					bptValsArray, weightsArray);
 			double minBPT = StatUtils.min(timeDepAllValsArray);
 			double maxBPT = StatUtils.max(timeDepAllValsArray);
-			double meanPois = U3FaultSystemSolutionFetcher.calcScaledAverage(
+			double meanPois = FaultSystemSolutionFetcher.calcScaledAverage(
 					poisValsArray, weightsArray);
 			double gainU3 = weightedAvgNonZero(gainVals, weights);
 			
@@ -5328,7 +5328,7 @@ public class FaultSysSolutionERF_Calc {
 				dist.set(1.0/sectPartRates[i], 1.0);
 		}
 		
-		DiscretizedFunc cumDist = dist.getNormalizedCumDist();
+		ArbitrarilyDiscretizedFunc cumDist = dist.getNormalizedCumDist();
 		cumDist.setName("Cumulative Distribution of Section Recurrence Intervals");
 		cumDist.setInfo("Num Sections = "+erf.getSolution().getRupSet().getNumSections()+
 				"\nFraction at RI=1600 years = "+cumDist.getInterpolatedY(1600)+
@@ -5384,7 +5384,7 @@ public class FaultSysSolutionERF_Calc {
 		GridSourceProvider gridSrcProvider = erf.getGridSourceProvider();
 		SummedMagFreqDist mfd1 = new SummedMagFreqDist(2.05,8.95,70);
 		for(int i=0;i<gridSrcProvider.getGriddedRegion().getNumLocations(); i++) {
-			IncrementalMagFreqDist mfd = gridSrcProvider.getMFD_SubSeisOnFault(i);
+			IncrementalMagFreqDist mfd = gridSrcProvider.getNodeSubSeisMFD(i);
 			if(mfd != null)
 				mfd1.addIncrementalMagFreqDist(mfd);
 //			else {

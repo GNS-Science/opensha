@@ -30,7 +30,7 @@ public class UCERF2_A_FaultMapper {
 	private static final String A_FAULT_FILE_NAME = "a_faults.txt";
 	private static HashSet<Integer> typeAFaults;
 	
-	private static synchronized HashSet<Integer> getTypeAFaults() {
+	private static HashSet<Integer> getTypeAFaults() {
 		if (typeAFaults == null) {
 			try {
 				typeAFaults = new HashSet<Integer>();
@@ -63,7 +63,7 @@ public class UCERF2_A_FaultMapper {
 		List<String> segLines = FileUtils.readLines(segFile);
 		
 		for (FaultModels fm : FaultModels.values()) {
-			Map<Integer, FaultSection> sects = fm.getFaultSectionIDMap();
+			Map<Integer, FaultSection> sects = fm.fetchFaultSectionsMap();
 			
 			Map<String, Integer> sectsByName = Maps.newHashMap();
 			for (FaultSection sect : sects.values())

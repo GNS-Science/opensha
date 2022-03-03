@@ -1159,12 +1159,12 @@ public class ETAS_Simulator {
 	public static void correctGriddedSeismicityRatesInERF(FaultSystemSolution sol, boolean plotRateRatio,
 			double[] gridSeisCorrValsArray) {
 		GridSourceProvider gridSources = sol.getGridSourceProvider();
-		gridSources.scaleAllMFDs(gridSeisCorrValsArray);
+		gridSources.scaleAllNodeMFDs(gridSeisCorrValsArray);
 		
 		double totalRate=0;
 		double[] nodeRateArray = new double[gridSources.size()];
 		for(int i=0;i<nodeRateArray.length;i++) {
-			nodeRateArray[i] = gridSources.getMFD(i).getCumRate(2.55);
+			nodeRateArray[i] = gridSources.getNodeMFD(i).getCumRate(2.55);
 			totalRate+=nodeRateArray[i];
 		}
 				

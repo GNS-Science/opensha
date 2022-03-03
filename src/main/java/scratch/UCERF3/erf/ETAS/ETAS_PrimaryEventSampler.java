@@ -21,7 +21,6 @@ import org.opensha.commons.data.TimeSpan;
 import org.opensha.commons.data.function.ArbDiscrEmpiricalDistFunc;
 import org.opensha.commons.data.function.ArbitrarilyDiscretizedFunc;
 import org.opensha.commons.data.function.DefaultXY_DataSet;
-import org.opensha.commons.data.function.DiscretizedFunc;
 import org.opensha.commons.data.function.EvenlyDiscretizedFunc;
 import org.opensha.commons.data.function.HistogramFunction;
 import org.opensha.commons.data.function.IntegerPDF_FunctionSampler;
@@ -1069,8 +1068,8 @@ double maxCharFactor = maxRate/cubeRateBeyondDistThresh;
 		
 		int num0=0,num1=0,num2=0;
 		for(int i=0;i<numGridLocs; i++) {
-			IncrementalMagFreqDist subSeisMFD = gridSrcProvider.getMFD_SubSeisOnFault(i);
-			IncrementalMagFreqDist trulyOffMFD = gridSrcProvider.getMFD_Unassociated(i);
+			IncrementalMagFreqDist subSeisMFD = gridSrcProvider.getNodeSubSeisMFD(i);
+			IncrementalMagFreqDist trulyOffMFD = gridSrcProvider.getNodeUnassociatedMFD(i);
 			double frac = faultPolyMgr.getNodeFraction(i);
 			if(subSeisMFD == null && trulyOffMFD != null) {
 				gridSeisStatus[i] = 0;	// no cubes are inside; all are truly off
@@ -2655,22 +2654,22 @@ double maxCharFactor = maxRate/cubeRateBeyondDistThresh;
 		System.out.println("meanValSupraRatesLog="+meanValSupraRatesLog+"\nmeanValSupraRatesMoRateWtedLog="+meanValSupraRatesMoRateWtedLog+"\nmeanValSupraRatesSupraRateWtedLog="+meanValSupraRatesSupraRateWtedLog);
 		System.out.println("meanValNumPrimaryLog="+meanValLog+"\nmeanValNumPrimaryMoRateWtedLog="+meanValMoRateWtedLog+"\nmeanValNumPrimarySupraRateWtedLog="+meanValSupraRateWtedLog);
 		
-		DiscretizedFunc charValSupraRatesDistCumDist = charValSupraRatesDist.getCumDist();
+		ArbitrarilyDiscretizedFunc charValSupraRatesDistCumDist = charValSupraRatesDist.getCumDist();
 		charValSupraRatesDistCumDist.scale(1.0/charValSupraRatesDist.calcSumOfY_Vals());
 		charValSupraRatesDistCumDist.setName("charValSupraRatesDistCumDist");
 		charValSupraRatesDistCumDist.setInfo("mean="+charValSupraRatesDist.getMean()+"; median="+charValSupraRatesDist.getMedian());
 		
-		DiscretizedFunc charValSupraRatesDistMoRateWtedCumDist = charValSupraRatesDistMoRateWted.getCumDist();
+		ArbitrarilyDiscretizedFunc charValSupraRatesDistMoRateWtedCumDist = charValSupraRatesDistMoRateWted.getCumDist();
 		charValSupraRatesDistMoRateWtedCumDist.scale(1.0/charValSupraRatesDistMoRateWted.calcSumOfY_Vals());
 		charValSupraRatesDistMoRateWtedCumDist.setName("charValSupraRatesDistMoRateWtedCumDist");
 		charValSupraRatesDistMoRateWtedCumDist.setInfo("mean="+charValSupraRatesDistMoRateWted.getMean()+"; median="+charValSupraRatesDistMoRateWted.getMedian());
 
-		DiscretizedFunc charValSupraRatesDistSupraRateWtedCumDist = charValSupraRatesDistSupraRateWted.getCumDist();
+		ArbitrarilyDiscretizedFunc charValSupraRatesDistSupraRateWtedCumDist = charValSupraRatesDistSupraRateWted.getCumDist();
 		charValSupraRatesDistSupraRateWtedCumDist.scale(1.0/charValSupraRatesDistSupraRateWted.calcSumOfY_Vals());
 		charValSupraRatesDistSupraRateWtedCumDist.setName("charValSupraRatesDistSupraRateWtedCumDist");
 		charValSupraRatesDistSupraRateWtedCumDist.setInfo("mean="+charValSupraRatesDistSupraRateWted.getMean()+"; median="+charValSupraRatesDistSupraRateWted.getMedian());
 		
-		ArrayList<DiscretizedFunc> funcs = new ArrayList<>();
+		ArrayList<ArbitrarilyDiscretizedFunc> funcs = new ArrayList<ArbitrarilyDiscretizedFunc>();
 		funcs.add(charValSupraRatesDistCumDist);
 		funcs.add(charValSupraRatesDistMoRateWtedCumDist);
 		funcs.add(charValSupraRatesDistSupraRateWtedCumDist);
@@ -2919,22 +2918,22 @@ double maxCharFactor = maxRate/cubeRateBeyondDistThresh;
 		System.out.println("meanValSupraRatesLog="+meanValSupraRatesLog+"\nmeanValSupraRatesMoRateWtedLog="+meanValSupraRatesMoRateWtedLog+"\nmeanValSupraRatesSupraRateWtedLog="+meanValSupraRatesSupraRateWtedLog);
 		System.out.println("meanValNumPrimaryLog="+meanValLog+"\nmeanValNumPrimaryMoRateWtedLog="+meanValMoRateWtedLog+"\nmeanValNumPrimarySupraRateWtedLog="+meanValSupraRateWtedLog);
 		
-		DiscretizedFunc charValSupraRatesDistCumDist = charValSupraRatesDist.getCumDist();
+		ArbitrarilyDiscretizedFunc charValSupraRatesDistCumDist = charValSupraRatesDist.getCumDist();
 		charValSupraRatesDistCumDist.scale(1.0/charValSupraRatesDist.calcSumOfY_Vals());
 		charValSupraRatesDistCumDist.setName("charValSupraRatesDistCumDist");
 		charValSupraRatesDistCumDist.setInfo("mean="+charValSupraRatesDist.getMean()+"; median="+charValSupraRatesDist.getMedian());
 		
-		DiscretizedFunc charValSupraRatesDistMoRateWtedCumDist = charValSupraRatesDistMoRateWted.getCumDist();
+		ArbitrarilyDiscretizedFunc charValSupraRatesDistMoRateWtedCumDist = charValSupraRatesDistMoRateWted.getCumDist();
 		charValSupraRatesDistMoRateWtedCumDist.scale(1.0/charValSupraRatesDistMoRateWted.calcSumOfY_Vals());
 		charValSupraRatesDistMoRateWtedCumDist.setName("charValSupraRatesDistMoRateWtedCumDist");
 		charValSupraRatesDistMoRateWtedCumDist.setInfo("mean="+charValSupraRatesDistMoRateWted.getMean()+"; median="+charValSupraRatesDistMoRateWted.getMedian());
 
-		DiscretizedFunc charValSupraRatesDistSupraRateWtedCumDist = charValSupraRatesDistSupraRateWted.getCumDist();
+		ArbitrarilyDiscretizedFunc charValSupraRatesDistSupraRateWtedCumDist = charValSupraRatesDistSupraRateWted.getCumDist();
 		charValSupraRatesDistSupraRateWtedCumDist.scale(1.0/charValSupraRatesDistSupraRateWted.calcSumOfY_Vals());
 		charValSupraRatesDistSupraRateWtedCumDist.setName("charValSupraRatesDistSupraRateWtedCumDist");
 		charValSupraRatesDistSupraRateWtedCumDist.setInfo("mean="+charValSupraRatesDistSupraRateWted.getMean()+"; median="+charValSupraRatesDistSupraRateWted.getMedian());
 		
-		ArrayList<DiscretizedFunc> funcs = new ArrayList<>();
+		ArrayList<ArbitrarilyDiscretizedFunc> funcs = new ArrayList<ArbitrarilyDiscretizedFunc>();
 		funcs.add(charValSupraRatesDistCumDist);
 		funcs.add(charValSupraRatesDistMoRateWtedCumDist);
 		funcs.add(charValSupraRatesDistSupraRateWtedCumDist);
@@ -3252,17 +3251,17 @@ double maxCharFactor = maxRate/cubeRateBeyondDistThresh;
 			parSectCharFactorVsSupraRateData.set(supraRate, 1.0/parGRcorrSupraRates);
 			System.out.println(name+"\t"+(1.0/parGRcorrSupraRates)+"\t"+(1.0/parGRcorr)+"\t"+supraRate+"\t"+moRate);
 		}
-		DiscretizedFunc parSectCharFactorDistSupraRateWtedCum = parSectCharFactorDistSupraRateWted.getCumDist();
+		ArbitrarilyDiscretizedFunc parSectCharFactorDistSupraRateWtedCum = parSectCharFactorDistSupraRateWted.getCumDist();
 		parSectCharFactorDistSupraRateWtedCum.scale(1.0/parSectCharFactorDistSupraRateWted.calcSumOfY_Vals());
 		parSectCharFactorDistSupraRateWtedCum.setName("parSectCharFactorDistSupraRateWtedCum");
 		parSectCharFactorDistSupraRateWtedCum.setInfo("mean="+parSectCharFactorDistSupraRateWted.getMean()+"; median="+parSectCharFactorDistSupraRateWted.getMedian()); //+"; mode="+parSectDistGRcorr.getMode());
 
-		DiscretizedFunc parSectCharFactorDistCum = parSectCharFactorDist.getCumDist();
+		ArbitrarilyDiscretizedFunc parSectCharFactorDistCum = parSectCharFactorDist.getCumDist();
 		parSectCharFactorDistCum.scale(1.0/parSectCharFactorDist.calcSumOfY_Vals());
 		parSectCharFactorDistCum.setName("parSectCharFactorDistCum");
 		parSectCharFactorDistCum.setInfo("mean="+parSectCharFactorDist.getMean()+"; median="+parSectCharFactorDist.getMedian()); // +"; mode="+parSectDistGRcorrSupraRates.getMode());
 
-		ArrayList<DiscretizedFunc> parSectFuncs = new ArrayList<>();
+		ArrayList<ArbitrarilyDiscretizedFunc> parSectFuncs = new ArrayList<ArbitrarilyDiscretizedFunc>();
 		parSectFuncs.add(parSectCharFactorDistSupraRateWtedCum);
 		parSectFuncs.add(parSectCharFactorDistCum);
 		GraphWindow parSectGraph = new GraphWindow(parSectFuncs, "Parent Sect CharFactor Stats"); 
@@ -3487,17 +3486,17 @@ double maxCharFactor = maxRate/cubeRateBeyondDistThresh;
 			parSectCharFactorVsSupraRateData.set(parentSectSupraSeisMFD_Map.get(name).getCumRate(minMagSupra), 1.0/parGRcorrSupraRates);
 			System.out.println(name+"\t"+(1.0/parGRcorrSupraRates)+"\t"+(1.0/parGRcorr)+"\t"+moRate);
 		}
-		DiscretizedFunc parSectCharFactorDistMoRateWtedCum = parSectCharFactorDistMoRateWted.getCumDist();
+		ArbitrarilyDiscretizedFunc parSectCharFactorDistMoRateWtedCum = parSectCharFactorDistMoRateWted.getCumDist();
 		parSectCharFactorDistMoRateWtedCum.scale(1.0/parSectCharFactorDistMoRateWted.calcSumOfY_Vals());
 		parSectCharFactorDistMoRateWtedCum.setName("parSectCharFactorDistMoRateWtedCum");
 		parSectCharFactorDistMoRateWtedCum.setInfo("mean="+parSectCharFactorDistMoRateWted.getMean()+"; median="+parSectCharFactorDistMoRateWted.getMedian()); //+"; mode="+parSectDistGRcorr.getMode());
 
-		DiscretizedFunc parSectCharFactorDistCum = parSectCharFactorDist.getCumDist();
+		ArbitrarilyDiscretizedFunc parSectCharFactorDistCum = parSectCharFactorDist.getCumDist();
 		parSectCharFactorDistCum.scale(1.0/parSectCharFactorDist.calcSumOfY_Vals());
 		parSectCharFactorDistCum.setName("parSectCharFactorDistCum");
 		parSectCharFactorDistCum.setInfo("mean="+parSectCharFactorDist.getMean()+"; median="+parSectCharFactorDist.getMedian()); // +"; mode="+parSectDistGRcorrSupraRates.getMode());
 
-		ArrayList<DiscretizedFunc> parSectFuncs = new ArrayList<>();
+		ArrayList<ArbitrarilyDiscretizedFunc> parSectFuncs = new ArrayList<ArbitrarilyDiscretizedFunc>();
 		parSectFuncs.add(parSectCharFactorDistMoRateWtedCum);
 		parSectFuncs.add(parSectCharFactorDistCum);
 		GraphWindow parSectGraph = new GraphWindow(parSectFuncs, "Parent Sect CharFactor Stats"); 
@@ -4271,7 +4270,7 @@ double maxCharFactor = maxRate/cubeRateBeyondDistThresh;
 					// check whether hypLoc is now out of region, and return false if so
 					if(testIndex == -1)
 						return false;
-					IncrementalMagFreqDist mfd = fssERF.getSolution().getGridSourceProvider().getMFD(testIndex);
+					IncrementalMagFreqDist mfd = fssERF.getSolution().getGridSourceProvider().getNodeMFD(testIndex);
 //					if(mfd==null) {
 //						throw new RuntimeException("testIndex="+testIndex+"\thypLoc= "+hypLoc+"\tgridLoc= "+tempERF.getSolution().getGridSourceProvider().getGriddedRegion().getLocation(testIndex));
 //					}
