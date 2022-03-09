@@ -15,6 +15,7 @@ import java.util.Objects;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
+import org.opensha.commons.data.IntegerSampler;
 import org.opensha.commons.data.function.IntegerPDF_FunctionSampler;
 import org.opensha.commons.util.modules.ModuleContainer;
 import org.opensha.commons.util.modules.SubModule;
@@ -24,6 +25,8 @@ import org.opensha.sha.earthquake.faultSysSolution.FaultSystemSolution;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.constraints.ConstraintWeightingType;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.constraints.InversionConstraint;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.constraints.InversionConstraint.Adapter;
+import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.ColumnOrganizedAnnealingData;
+import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.ReweightEvenFitSimulatedAnnealing;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.SerialSimulatedAnnealing;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.SimulatedAnnealing;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.ThreadedSimulatedAnnealing;
@@ -31,17 +34,20 @@ import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.Compl
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.CompoundCompletionCriteria;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.EnergyCompletionCriteria;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.IterationCompletionCriteria;
+import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.IterationsPerVariableCompletionCriteria;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.MisfitStdDevCompletionCriteria;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.TimeCompletionCriteria;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.params.CoolingScheduleType;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.params.GenerationFunctionType;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.params.NonnegativityConstraintType;
+import org.opensha.sha.earthquake.faultSysSolution.modules.InversionMisfitStats.Quantity;
 import org.opensha.sha.earthquake.faultSysSolution.util.FaultSysTools;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.annotations.JsonAdapter;
 
 /**
  * This class contains the constraints and inversion parameters needed to configure and run an inversion.
@@ -66,11 +72,13 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 	
 	// annealing params
 	private double[] variablePertubationBasis;
-	private IntegerPDF_FunctionSampler sampler;
+	@JsonAdapter(IntegerSampler.Adapter.class)
+	private IntegerSampler sampler;
 	private GenerationFunctionType perturb = PERTURB_DEFAULT;
 	private NonnegativityConstraintType nonneg = NON_NEG_DEFAULT;
 	private CoolingScheduleType cool = COOL_DEFAULT;
 	private CompletionCriteria completion;
+	private Quantity reweightTargetQuantity = null;
 	
 	// for threaded inversions
 	private int threads = 1;
@@ -178,6 +186,11 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 			if (cmd.hasOption("non-negativity"))
 				config.nonneg = NonnegativityConstraintType.valueOf(cmd.getOptionValue("non-negativity"));
 			
+			if (cmd.hasOption("reweight-quantity"))
+				config.reweightTargetQuantity = Quantity.valueOf(cmd.getOptionValue("reweight-quantity"));
+			else if (cmd.hasOption("reweight"))
+				config.reweightTargetQuantity = ReweightEvenFitSimulatedAnnealing.QUANTITY_DEFAULT;
+			
 			return this;
 		}
 		
@@ -219,7 +232,7 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 			return sampler(new IntegerPDF_FunctionSampler(samplerBasis));
 		}
 		
-		public Builder sampler(IntegerPDF_FunctionSampler sampler) {
+		public Builder sampler(IntegerSampler sampler) {
 			config.sampler = sampler;
 			return this;
 		}
@@ -263,9 +276,29 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 			return this;
 		}
 		
+		public Builder completion(CompletionCriteria completion) {
+			config.completion = completion;
+			return this;
+		}
+		
 		public Builder avgThreads(int avgThreads, CompletionCriteria avgCompletion) {
 			config.avgThreads = avgThreads;
 			config.avgCompletion = avgCompletion;
+			return this;
+		}
+		
+		public Builder noAvg() {
+			config.avgThreads = null;
+			config.avgCompletion = null;
+			return this;
+		}
+		
+		public Builder reweight() {
+			return reweight(ReweightEvenFitSimulatedAnnealing.QUANTITY_DEFAULT);
+		}
+		
+		public Builder reweight(Quantity reweightTargetQuantity) {
+			config.reweightTargetQuantity = reweightTargetQuantity;
 			return this;
 		}
 		
@@ -293,7 +326,7 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 			Preconditions.checkState(!config.constraints.isEmpty(), "No comstraints supplied");
 			
 			Preconditions.checkState(config.threads >= 1, "Threads must be positive, supplied: %s", config.threads);
-			if (config.threads > 1 && config.subCompletion == null)
+			if (config.subCompletion == null && (config.threads > 1	|| config.reweightTargetQuantity != null))
 				config.subCompletion = SUB_COMPLETION_DEFAULT;
 			
 			if (config.avgThreads != null) {
@@ -321,6 +354,8 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 			return TimeCompletionCriteria.getInSeconds(Long.parseLong(value.substring(0, value.length()-1)));
 		if (value.endsWith("e")) // TODO add to docs
 			return new EnergyCompletionCriteria(Double.parseDouble(value.substring(0, value.length()-1)));
+		if (value.endsWith("ip")) // TODO add to docs
+			return new IterationsPerVariableCompletionCriteria(Double.parseDouble(value.substring(0, value.length()-2)));
 		if (value.endsWith("i"))
 			value = value.substring(0, value.length()-1);
 		return new IterationCompletionCriteria(Long.parseLong(value));
@@ -382,6 +417,20 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 				+FaultSysTools.enumOptions(NonnegativityConstraintType.class)+". Default: "+NON_NEG_DEFAULT.name());
 		nonNegOption.setRequired(false);
 		ops.addOption(nonNegOption);
+
+		Option reweightQuantity = new Option("rwq", "reweight-quantity", true, "Enables dynamic constraint reweighting, "
+				+ "targeting the given quantity. Note that this only applies to uncertainty-weighted constraints. "
+				+ "If you simply want enable re-weighting using the default quantity ("
+				+ReweightEvenFitSimulatedAnnealing.QUANTITY_DEFAULT.name()+"), use --reweight instead.");
+		reweightQuantity.setRequired(false);
+		ops.addOption(reweightQuantity);
+
+		Option reweight = new Option("rw", "reweight", true, "Enables dynamic constraint reweighting, "
+				+ "targeting "+ReweightEvenFitSimulatedAnnealing.QUANTITY_DEFAULT.name()+". Note that this only applies "
+				+ "to uncertainty-weighted constraints. If you want to target a different quantity, use "
+				+ "--reweight-quantity <quantity> instead.");
+		reweight.setRequired(false);
+		ops.addOption(reweight);
 		
 		return ops;
 	}
@@ -394,6 +443,10 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 	}
 	
 	public SimulatedAnnealing buildSA(InversionInputGenerator inputs) {
+		ColumnOrganizedAnnealingData equalityData = new ColumnOrganizedAnnealingData(inputs.getA(), inputs.getD());
+		ColumnOrganizedAnnealingData inequalityData = null;
+		if (inputs.getA_ineq() != null)
+			inequalityData = new ColumnOrganizedAnnealingData(inputs.getA_ineq(), inputs.getD_ineq());
 		SimulatedAnnealing sa;
 		if (threads > 1) {
 			if (avgThreads != null && avgThreads > 0) {
@@ -408,24 +461,31 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 				while (threadsLeft > 0) {
 					int myThreads = Integer.min(threadsLeft, threadsPerAvg);
 					if (myThreads > 1)
-						tsas.add(new ThreadedSimulatedAnnealing(inputs.getA(), inputs.getD(),
-								inputs.getInitialSolution(), 0d, inputs.getA_ineq(), inputs.getD_ineq(),
-								myThreads, subCompletion));
+						tsas.add(new ThreadedSimulatedAnnealing(equalityData, inequalityData,
+								inputs.getInitialSolution(), 0d, myThreads, subCompletion));
 					else
-						tsas.add(new SerialSimulatedAnnealing(inputs.getA(), inputs.getD(),
-								inputs.getInitialSolution(), 0d, inputs.getA_ineq(), inputs.getD_ineq()));
+						tsas.add(new SerialSimulatedAnnealing(equalityData, inequalityData,
+								inputs.getInitialSolution(), 0d));
 					threadsLeft -= myThreads;
 				}
 				sa = new ThreadedSimulatedAnnealing(tsas, avgCompletion, true);
 			} else {
-				sa = new ThreadedSimulatedAnnealing(inputs.getA(), inputs.getD(),
-						inputs.getInitialSolution(), 0d, inputs.getA_ineq(), inputs.getD_ineq(), threads, subCompletion);
+				sa = new ThreadedSimulatedAnnealing(equalityData, inequalityData,
+						inputs.getInitialSolution(), 0d, threads, subCompletion);
 			}
 		} else {
-			sa = new SerialSimulatedAnnealing(inputs.getA(), inputs.getD(), inputs.getInitialSolution(), 0d,
-					inputs.getA_ineq(), inputs.getD_ineq());
+			sa = new SerialSimulatedAnnealing(equalityData, inequalityData, inputs.getInitialSolution(), 0d);
 		}
 		sa.setConstraintRanges(inputs.getConstraintRowRanges());
+		if (reweightTargetQuantity != null) {
+			if (sa instanceof ThreadedSimulatedAnnealing) {
+				sa = new ReweightEvenFitSimulatedAnnealing((ThreadedSimulatedAnnealing)sa, reweightTargetQuantity);
+			} else {
+				sa.setConstraintRanges(null);
+				sa = new ReweightEvenFitSimulatedAnnealing(sa, subCompletion, reweightTargetQuantity);
+				sa.setConstraintRanges(inputs.getConstraintRowRanges());
+			}
+		}
 		
 		if (perturb.isVariable()) {
 			double[] basis = variablePertubationBasis;
@@ -483,7 +543,7 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 		return variablePertubationBasis;
 	}
 
-	public IntegerPDF_FunctionSampler getSampler() {
+	public IntegerSampler getSampler() {
 		return sampler;
 	}
 
@@ -561,6 +621,7 @@ public class InversionConfiguration implements SubModule<ModuleContainer<?>>, JS
 		subCompletion = source.subCompletion;
 		avgThreads = source.avgThreads;
 		avgCompletion = source.avgCompletion;
+		reweightTargetQuantity = source.reweightTargetQuantity;
 	}
 
 	@Override

@@ -39,7 +39,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Table;
 import com.google.common.primitives.Ints;
 
-import scratch.UCERF3.CompoundFaultSystemSolution;
+import scratch.UCERF3.U3CompoundFaultSystemSolution;
 import scratch.UCERF3.U3FaultSystemRupSet;
 import scratch.UCERF3.U3FaultSystemSolution;
 import scratch.UCERF3.enumTreeBranches.DeformationModels;
@@ -48,8 +48,8 @@ import scratch.UCERF3.enumTreeBranches.ScalingRelationships;
 import scratch.UCERF3.griddedSeismicity.GridSourceFileReader;
 import scratch.UCERF3.inversion.InversionFaultSystemRupSet;
 import scratch.UCERF3.inversion.InversionFaultSystemSolution;
-import scratch.UCERF3.logicTree.APrioriBranchWeightProvider;
-import scratch.UCERF3.logicTree.BranchWeightProvider;
+import scratch.UCERF3.logicTree.U3APrioriBranchWeightProvider;
+import scratch.UCERF3.logicTree.U3BranchWeightProvider;
 import scratch.UCERF3.logicTree.U3LogicTreeBranch;
 import scratch.UCERF3.logicTree.U3LogicTreeBranchNode;
 import scratch.UCERF3.utils.U3FaultSystemIO;
@@ -220,9 +220,9 @@ public class TrueMeanBuilder {
 		File outputDir = new File("/tmp/true_mean");
 		
 		File compoundFile = new File(invDir, "2013_05_10-ucerf3p3-production-10runs_COMPOUND_SOL.zip");
-		CompoundFaultSystemSolution cfss = CompoundFaultSystemSolution.fromZipFile(compoundFile);
+		U3CompoundFaultSystemSolution cfss = U3CompoundFaultSystemSolution.fromZipFile(compoundFile);
 		cfss.setCacheCopying(false);
-		BranchWeightProvider weightProvider = new APrioriBranchWeightProvider();
+		U3BranchWeightProvider weightProvider = new U3APrioriBranchWeightProvider();
 		FaultModels[] fms = { FaultModels.FM3_1, FaultModels.FM3_2 };
 		String nameAdd = "";
 //		FaultModels[] fms = { FaultModels.FM3_1};

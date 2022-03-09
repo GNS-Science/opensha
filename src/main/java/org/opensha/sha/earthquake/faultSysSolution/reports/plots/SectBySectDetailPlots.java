@@ -1251,27 +1251,29 @@ public class SectBySectDetailPlots extends AbstractRupSetPlot {
 		lines.add(topLink); lines.add("");
 
 		String prefix = "sect_along_strike";
-		writeAlongStringPlots(outputDir, prefix, plots, parentsMap, latX, xLabel, xRange, faultName);
+		writeAlongStrikePlots(outputDir, prefix, plots, parentsMap, latX, xLabel, xRange, faultName);
 
 		lines.add("![Along-strike plot]("+outputDir.getName()+"/"+prefix+".png)");
 		
-		lines.add("### Moment-Rates and b-Values");
-		lines.add(topLink); lines.add("");
-		
-		plots = new ArrayList<>();
+		if (meta.primary.rupSet.hasModule(AveSlipModule.class)) {
+			lines.add("### Moment-Rates and b-Values");
+			lines.add(topLink); lines.add("");
+			
+			plots = new ArrayList<>();
 
-		plots.add(buildMoRatePlot(meta, faultSects, faultName, emptySectFuncs, xLabel, legendRelX));
-		plots.add(buildBValPlot(meta, faultSects, faultName, emptySectFuncs, xLabel, legendRelX));
-		
-		prefix = "sect_along_strike_mo_b";
-		writeAlongStringPlots(outputDir, prefix, plots, parentsMap, latX, xLabel, xRange, faultName);
+			plots.add(buildMoRatePlot(meta, faultSects, faultName, emptySectFuncs, xLabel, legendRelX));
+			plots.add(buildBValPlot(meta, faultSects, faultName, emptySectFuncs, xLabel, legendRelX));
+			
+			prefix = "sect_along_strike_mo_b";
+			writeAlongStrikePlots(outputDir, prefix, plots, parentsMap, latX, xLabel, xRange, faultName);
 
-		lines.add("![Along-strike plot]("+outputDir.getName()+"/"+prefix+".png)");
+			lines.add("![Along-strike plot]("+outputDir.getName()+"/"+prefix+".png)");
+		}
 		
 		return lines;
 	}
 	
-	private static void writeAlongStringPlots(File outputDir, String prefix, List<AlongStrikePlot> plots,
+	private static void writeAlongStrikePlots(File outputDir, String prefix, List<AlongStrikePlot> plots,
 			Map<Integer, List<FaultSection>> parentsMap, boolean latX, String xLabel, Range xRange, String faultName)
 					throws IOException {
 		List<PlotSpec> specs = new ArrayList<>();
@@ -1777,7 +1779,8 @@ public class SectBySectDetailPlots extends AbstractRupSetPlot {
 		
 		FaultSystemRupSet rupSet = meta.primary.rupSet;
 		
-		boolean comp = meta.hasComparisonSol();
+		boolean comp = meta.hasComparisonSol() && meta.comparison.rupSet.hasModule(AveSlipModule.class)
+				&& meta.comparison.rupSet.hasModule(SlipAlongRuptureModel.class);
 		
 		SectSlipRates slipRates = rupSet.getModule(SectSlipRates.class);
 		
@@ -1854,7 +1857,7 @@ public class SectBySectDetailPlots extends AbstractRupSetPlot {
 		
 		FaultSystemRupSet rupSet = meta.primary.rupSet;
 		
-		boolean comp = meta.hasComparisonSol();
+		boolean comp = meta.hasComparisonSol() && meta.comparison.rupSet.hasModule(AveSlipModule.class);
 		
 		SectSlipRates slipRates = rupSet.getModule(SectSlipRates.class);
 		
@@ -1937,11 +1940,7 @@ public class SectBySectDetailPlots extends AbstractRupSetPlot {
 		List<XY_DataSet> funcs = new ArrayList<>();
 		List<PlotCurveCharacterstics> chars = new ArrayList<>();
 		
-		FaultSystemRupSet rupSet = meta.primary.rupSet;
-		
-		boolean comp = meta.hasComparisonSol();
-		
-		SectSlipRates slipRates = rupSet.getModule(SectSlipRates.class);
+		boolean comp = meta.hasComparisonSol() && meta.comparison.rupSet.hasModule(AveSlipModule.class);
 		
 		double[] rupMoRates = SectBValuePlot.calcRupMomentRates(meta.primary.sol);
 		double[] compRupMoRates = comp ? SectBValuePlot.calcRupMomentRates(meta.comparison.sol) : null;
@@ -1998,7 +1997,7 @@ public class SectBySectDetailPlots extends AbstractRupSetPlot {
 		double[] solSlipRates = new double[parentSects.size()];
 		FaultSystemRupSet rupSet = sol.getRupSet();
 		SlipAlongRuptureModel slipAlongs = rupSet.getModule(SlipAlongRuptureModel.class);
-		AveSlipModule aveSlips = rupSet.getModule(AveSlipModule.class);
+		AveSlipModule aveSlips = rupSet.requireModule(AveSlipModule.class);
 		
 		for (int s=0; s<solSlipRates.length; s++)
 			solSlipRates[s] = slipAlongs.calcSlipRateForSect(sol, aveSlips, parentSects.get(s).getSectionId());

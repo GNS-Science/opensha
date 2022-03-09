@@ -1,11 +1,9 @@
 package org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion;
 
-import java.util.List;
+import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.InversionState;
+import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.CompletionCriteria.EstimationCompletionCriteria;
 
-import org.apache.commons.lang3.time.StopWatch;
-import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.ConstraintRange;
-
-public class TimeCompletionCriteria implements CompletionCriteria {
+public class TimeCompletionCriteria implements EstimationCompletionCriteria {
 	
 	private long millis;
 	
@@ -19,8 +17,8 @@ public class TimeCompletionCriteria implements CompletionCriteria {
 	}
 
 	@Override
-	public boolean isSatisfied(StopWatch watch, long iter, double[] energy, long numPerturbsKept, int numNonZero, double[] misfits, double[] misfits_ineq, List<ConstraintRange> constraintRanges) {
-		return watch.getTime() >= millis;
+	public boolean isSatisfied(InversionState state) {
+		return state.elapsedTimeMillis >= millis;
 	}
 	
 	@Override
@@ -80,6 +78,16 @@ public class TimeCompletionCriteria implements CompletionCriteria {
 		if (str.endsWith("mi"))
 			str = str.substring(0, str.length()-2);
 		return Long.parseLong(str);
+	}
+
+	@Override
+	public double estimateFractCompleted(InversionState state) {
+		return Math.min(1d, (double)state.elapsedTimeMillis/(double)millis);
+	}
+
+	@Override
+	public long estimateTimeLeft(InversionState state) {
+		return Long.max(0, millis-state.elapsedTimeMillis);
 	}
 
 }

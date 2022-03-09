@@ -48,6 +48,7 @@ import org.opensha.sha.earthquake.faultSysSolution.modules.SlipAlongRuptureModel
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.ClusterRupture;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.FaultSubsectionCluster;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.Jump;
+import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.PlausibilityConfiguration;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.PlausibilityResult;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.impl.JumpAzimuthChangeFilter;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.impl.prob.CumulativeProbabilityFilter.*;
@@ -69,7 +70,7 @@ import com.google.common.collect.Table;
 import com.google.common.collect.Table.Cell;
 import com.google.common.primitives.Doubles;
 
-import scratch.UCERF3.SlipEnabledSolution;
+import scratch.UCERF3.U3SlipEnabledSolution;
 import scratch.UCERF3.utils.U3FaultSystemIO;
 
 public class SegmentationCalculator {
@@ -108,6 +109,11 @@ public class SegmentationCalculator {
 			@Override
 			public double calc(Jump jump, JumpRates rates, SectionDistanceAzimuthCalculator distAzCalc,
 					SubSectStiffnessCalculator stiffnessCalc) {
+				double rateAvgDist = rates.getRateWeightedDistance();
+				if (Double.isFinite(rateAvgDist))
+					// a jump can have different distances depending on what other sections are involved, use the
+					// rate-weighted distance
+					return rateAvgDist;
 				return jump.distance;
 			}
 
@@ -602,7 +608,7 @@ public class SegmentationCalculator {
 					parentJumpRateTable.put(pair, fullJump, jumpRates);
 				}
 				jumpRates.addAzimuiths(jump, fullFrom, fullTo, rates[r]);
-				jumpRates.addRate(mags[r], rates[r]);
+				jumpRates.addRate(mags[r], rates[r], jump.distance);
 			}
 		}
 		System.out.println("Processed "+ruptures.size()+" ruptures. Found "+parentJumpRateTable.size()
@@ -697,6 +703,9 @@ public class SegmentationCalculator {
 		public final JumpingPointRates toRates;
 		public final double[] magJumpRates;
 		
+		private double sumRate;
+		private double sumRateDist;
+		
 		public final AzTracker fromAzTrack;
 		public final AzTracker toAzTrack;
 		
@@ -714,8 +723,14 @@ public class SegmentationCalculator {
 			this.magJumpRates = magJumpRates;
 		}
 		
-		public void addRate(double mag, double rate) {
+		public void addRate(double mag, double rate, double distance) {
+			sumRate += rate;
+			sumRateDist += rate*distance;
 			addMagRate(magJumpRates, mag, rate);
+		}
+		
+		public double getRateWeightedDistance() {
+			return sumRateDist/sumRate;
 		}
 		
 		public void addAzimuiths(Jump jump, FaultSubsectionCluster fullFrom, FaultSubsectionCluster fullTo, double rate) {
@@ -771,6 +786,7 @@ public class SegmentationCalculator {
 		if (!multipleJumpsPerParent)
 			return this;
 		
+		FaultSystemRupSet rupSet = sol.getRupSet();
 		Table<IDPairing, Jump, JumpRates> combinedTable = HashBasedTable.create();
 		for (IDPairing pair : parentJumpRateTable.rowKeySet()) {
 			Map<Jump, JumpRates> jumpMap = parentJumpRateTable.row(pair);
@@ -782,6 +798,8 @@ public class SegmentationCalculator {
 				Jump bestJump = null;
 				JumpRates bestJumpRates = null;
 				double[] totRates = new double[minMags.length];
+				HashSet<Integer> fromRups = new HashSet<>();
+				HashSet<Integer> toRups = new HashSet<>();
 				for (Jump jump : jumpMap.keySet()) {
 					JumpRates rate = jumpMap.get(jump);
 					boolean newBest = bestJump == null
@@ -793,29 +811,35 @@ public class SegmentationCalculator {
 					}
 					for (int m=0; m<minMags.length; m++)
 						totRates[m] += rate.magJumpRates[m];
+					fromRups.addAll(rupSet.getRupturesForSection(jump.fromSection.getSectionId()));
+					toRups.addAll(rupSet.getRupturesForSection(jump.toSection.getSectionId()));
 				}
 				double totMaxRate = StatUtils.max(totRates);
 				double[] combFromSectRates = new double[minMags.length];
 				double[] combToSectRates = new double[minMags.length];
+				// to/from rates should be the sum of all ruptures that touch any of the from/to sections
+				for (int rup : fromRups)
+					addMagRate(combFromSectRates, rupSet.getMagForRup(rup), sol.getRateForRup(rup));
+				for (int rup : toRups)
+					addMagRate(combToSectRates, rupSet.getMagForRup(rup), sol.getRateForRup(rup));
 				double combFromRupSetSlipRate = 0d;
 				double combToRupSetSlipRate = 0d;
 				double combFromSolSlipRate = 0d;
 				double combToSolSlipRate = 0d;
+				double sumRateDist = 0d;
+				double sumRate = 0d;
 				for (Jump jump : jumpMap.keySet()) {
 					// average everything, weighted by the rate that jump is used
 					JumpRates jumpRates = jumpMap.get(jump);
-					for (int m=0; m<minMags.length; m++) {
-						// mag-specific weight
-						double weight = jumpRates.magJumpRates[m]/totRates[m];
-						combFromSectRates[m] += jumpRates.fromRates.sectRates[m]*weight;
-						combToSectRates[m] += jumpRates.toRates.sectRates[m]*weight;
-					}
 					// total weight
 					double weight = StatUtils.max(jumpRates.magJumpRates)/totMaxRate;
 					combFromRupSetSlipRate += jumpRates.fromRates.rupSetSlipRate*weight;
 					combToRupSetSlipRate += jumpRates.toRates.rupSetSlipRate*weight;
 					combFromSolSlipRate += jumpRates.fromRates.solSlipRate*weight;
 					combToSolSlipRate += jumpRates.toRates.solSlipRate*weight;
+					
+					sumRateDist += jumpRates.sumRateDist;
+					sumRate += jumpRates.sumRate;
 				}
 				FaultSection fromSect = bestJump.fromSection;
 				JumpingPointRates combFromRates = new JumpingPointRates(fromSect, parentParticRates.get(fromSect.getParentSectionId()),
@@ -824,6 +848,8 @@ public class SegmentationCalculator {
 				JumpingPointRates combToRates = new JumpingPointRates(toSect, parentParticRates.get(toSect.getParentSectionId()),
 						combToSectRates, combToRupSetSlipRate, combToSolSlipRate);
 				JumpRates combJumpRates = new JumpRates(combFromRates, bestJumpRates.fromAzTrack, combToRates, bestJumpRates.toAzTrack, totRates);
+				combJumpRates.sumRateDist = sumRateDist;
+				combJumpRates.sumRate = sumRate;
 				combinedTable.put(pair, bestJump, combJumpRates);
 			}
 		}
@@ -891,6 +917,14 @@ public class SegmentationCalculator {
 		return GMT_CPT_Files.RAINBOW_UNIFORM.instance().rescale(0d, 1d);
 	}
 	
+	private static CPT getConnectionDiffCPT() throws IOException {
+		return GMT_CPT_Files.GMT_POLAR.instance().rescale(-0.5d, 0.5d);
+	}
+	
+	private static CPT getConnectionLogRatioCPT() throws IOException {
+		return GMT_CPT_Files.GMT_POLAR.instance().rescale(-1d, 1d);
+	}
+	
 	public File[] plotConnectionFracts(File outputDir, String prefix, String title, int width, RateCombiner combiner) throws IOException {
 		RupSetMapMaker plotter = new RupSetMapMaker(sol.getRupSet(), RupSetMapMaker.buildBufferedRegion(subSects));
 //		plotter.setJumpLineThickness(4f);
@@ -902,25 +936,106 @@ public class SegmentationCalculator {
 		for (int m=0; m<minMags.length; m++) {
 			plotter.clearJumpScalars();
 			
-			List<Jump> jumps = new ArrayList<>();
-			List<Double> values = new ArrayList<>();
-			for (Cell<IDPairing, Jump, JumpRates> cell : parentJumpRateTable.cellSet()) {
-				JumpRates rates = cell.getValue();
-				double jumpRate = rates.magJumpRates[m];
-				double fromVal = rates.fromRates.sectRates[m];
-				double toVal = rates.toRates.sectRates[m];
-				double fract = jumpRate/combiner.combine(fromVal, toVal);
-				if (fract > 0d) {
-					jumps.add(cell.getColumnKey());
-					values.add(fract);
-				}
-			}
 			String label = getMagLabel(minMags[m])+" Passthrough Rate (Rel. "+combiner+")";
-			plotter.plotJumpScalars(jumps, values, cpt, label);
+			plotter.plotJumpScalars(calcJumpPassthroughs(m, combiner), cpt, label);
 			
 			String myPrefix = prefix+"_"+getMagPrefix(minMags[m]);
 			ret[m] = new File(outputDir, myPrefix+".png");
 			plotter.plot(outputDir, myPrefix, title, width);
+		}
+		
+		return ret;
+	}
+	
+	private Map<Jump, Double> calcJumpPassthroughs(int magIndex, RateCombiner combiner) {
+		Map<Jump, Double> ret = new HashMap<>();
+		for (Cell<IDPairing, Jump, JumpRates> cell : parentJumpRateTable.cellSet()) {
+			JumpRates rates = cell.getValue();
+			double jumpRate = rates.magJumpRates[magIndex];
+			double fromVal = rates.fromRates.sectRates[magIndex];
+			double toVal = rates.toRates.sectRates[magIndex];
+			double fract = jumpRate/combiner.combine(fromVal, toVal);
+			if (fract > 0d)
+				ret.put(cell.getColumnKey(), fract);
+		}
+		return ret;
+	}
+	
+	public File[] plotConnectionDiffs(File outputDir, String prefix, String title, RateCombiner combiner,
+			SegmentationCalculator compCalc) throws IOException {
+		RupSetMapMaker plotter = new RupSetMapMaker(sol.getRupSet(), RupSetMapMaker.buildBufferedRegion(subSects));
+//		plotter.setJumpLineThickness(4f);
+		
+		CPT cpt = getConnectionDiffCPT();
+		
+		File[] ret = new File[minMags.length];
+		
+		for (int m=0; m<minMags.length; m++) {
+			plotter.clearJumpScalars();
+			
+			String label = getMagLabel(minMags[m])+" Passthrough Rate Difference";
+			Map<Jump, Double> primary = calcJumpPassthroughs(m, combiner);
+			Map<Jump, Double> comp = compCalc.calcJumpPassthroughs(m, combiner);
+			HashSet<Jump> allJumps = new HashSet<>();
+			allJumps.addAll(primary.keySet());
+			allJumps.addAll(comp.keySet());
+			List<Jump> jumps = new ArrayList<>();
+			List<Double> values = new ArrayList<>();
+			for (Jump jump : allJumps) {
+				Double val1 = primary.get(jump);
+				Double val2 = comp.get(jump);
+				if (val1 == null)
+					val1 = 0d;
+				if (val2 == null)
+					val2 = 0d;
+				jumps.add(jump);
+				values.add(val1 - val2);
+			}
+			plotter.plotJumpScalars(jumps, values, cpt, label);
+			
+			String myPrefix = prefix+"_"+getMagPrefix(minMags[m]);
+			ret[m] = new File(outputDir, myPrefix+".png");
+			plotter.plot(outputDir, myPrefix, title, 800);
+		}
+		
+		return ret;
+	}
+	
+	public File[] plotConnectionLogRatios(File outputDir, String prefix, String title, RateCombiner combiner,
+			SegmentationCalculator compCalc) throws IOException {
+		RupSetMapMaker plotter = new RupSetMapMaker(sol.getRupSet(), RupSetMapMaker.buildBufferedRegion(subSects));
+//		plotter.setJumpLineThickness(4f);
+		
+		CPT cpt = getConnectionLogRatioCPT();
+		
+		File[] ret = new File[minMags.length];
+		
+		for (int m=0; m<minMags.length; m++) {
+			plotter.clearJumpScalars();
+			
+			String label = "Log10 "+getMagLabel(minMags[m])+" Passthrough Rate Ratio";
+			Map<Jump, Double> primary = calcJumpPassthroughs(m, combiner);
+			Map<Jump, Double> comp = compCalc.calcJumpPassthroughs(m, combiner);
+			HashSet<Jump> allJumps = new HashSet<>();
+			allJumps.addAll(primary.keySet());
+			allJumps.addAll(comp.keySet());
+			List<Jump> jumps = new ArrayList<>();
+			List<Double> values = new ArrayList<>();
+			for (Jump jump : allJumps) {
+				Double val1 = primary.get(jump);
+				Double val2 = comp.get(jump);
+				if (val1 == null)
+					val1 = 0d;
+				if (val2 == null)
+					val2 = 0d;
+				jumps.add(jump);
+				values.add(Math.log10(val1/val2));
+			}
+			plotter.plotJumpScalars(jumps, values, cpt, label);
+			
+			String myPrefix = prefix+"_"+getMagPrefix(minMags[m]);
+			ret[m] = new File(outputDir, myPrefix+".png");
+			plotter.plot(outputDir, myPrefix, title, 800);
 		}
 		
 		return ret;
@@ -1390,7 +1505,7 @@ public class SegmentationCalculator {
 		
 		Scalars scalar = Scalars.JUMP_DIST;
 		
-		double[] r0s = { 2d, 3d, 4d, 6d };
+		double[] r0s = { 1d, 2d, 3d, 4d, 6d };
 		Color[] r0cs = new Color[r0s.length];
 		CPT r0cpt = new CPT(0d, r0s.length-1, Color.RED, Color.BLUE);
 		for (int c=0; c<r0cs.length; c++)
@@ -1437,6 +1552,15 @@ public class SegmentationCalculator {
 //					Preconditions.checkState(Double.isFinite(toVal));
 					double rate = combiner.combine(fromVal, toVal);
 					fract = jumpRate/rate;
+					
+					Preconditions.checkState(fract < 1.001, "Passthrough fraction is >1: %s\n"
+							+ "\tjump=%s, fromVal=%s, toVal=%s, jumpRate=%s, combRate[%s]=%s",
+							fract, jump, fromVal, toVal, jumpRate, combiner, rate);
+//					if (fract > 1) {
+//						System.out.println("ABOVE 1!! jump="+jump+" with rate="+jumpRate+" and combiner: "+combiner.name());
+//						System.out.println("\tfromVal="+fromVal+"\ttoVal="+toVal+"\trate="+rate);
+//						System.out.println("\tfract = "+jumpRate+" / "+rate+" = "+fract);
+//					}
 					Color c = rateCPT.getColor((float)Math.log10(rate));
 					c = new Color(c.getRed(), c.getGreen(), c.getBlue(), 200);
 					
@@ -1547,35 +1671,50 @@ public class SegmentationCalculator {
 	}
 	
 	public static void main(String[] args) throws IOException, DocumentException {
-		File rupSetDir = new File("/home/kevin/OpenSHA/UCERF4/rup_sets");
-		FaultSystemSolution sol = U3FaultSystemIO.loadSol(new File(
-				rupSetDir, "rsqsim_4983_stitched_m6.5_skip65000_sectArea0.5.zip"));
-		double jumpDist = 15d;
-		File distCacheFile = new File(rupSetDir, "fm3_1_dist_az_cache.csv");
-		FaultSystemRupSet rupSet = sol.getRupSet();
-		SectionDistanceAzimuthCalculator distAzCalc = new SectionDistanceAzimuthCalculator(rupSet.getFaultSectionDataList());
-		distAzCalc.loadCacheFile(distCacheFile);
-//		ClusterConnectionStrategy connStrat = new DistCutoffClosestSectClusterConnectionStrategy(rupSet.getFaultSectionDataList(), distAzCalc, jumpDist);
-		ClusterConnectionStrategy connStrat = new InputJumpsOrDistClusterConnectionStrategy(rupSet.getFaultSectionDataList(), distAzCalc, jumpDist, new ArrayList<>());
-		RuptureConnectionSearch rsConnSearch = new RuptureConnectionSearch(rupSet, distAzCalc,
-				1000d, RuptureConnectionSearch.CUMULATIVE_JUMPS_DEFAULT);
-		rupSet.addModule(ClusterRuptures.instance(rupSet, rsConnSearch));
-		List<ClusterRupture> rups = rupSet.getModule(ClusterRuptures.class).getAll();
-		
-		SegmentationCalculator calc = new SegmentationCalculator(sol, rups, connStrat, distAzCalc, new double[] {6.5d, 7.5d});
+//		File rupSetDir = new File("/home/kevin/OpenSHA/UCERF4/rup_sets");
+//		FaultSystemSolution sol = U3FaultSystemIO.loadSol(new File(
+//				rupSetDir, "rsqsim_4983_stitched_m6.5_skip65000_sectArea0.5.zip"));
+//		double jumpDist = 15d;
+//		File distCacheFile = new File(rupSetDir, "fm3_1_dist_az_cache.csv");
+//		FaultSystemRupSet rupSet = sol.getRupSet();
+//		SectionDistanceAzimuthCalculator distAzCalc = new SectionDistanceAzimuthCalculator(rupSet.getFaultSectionDataList());
+//		distAzCalc.loadCacheFile(distCacheFile);
+////		ClusterConnectionStrategy connStrat = new DistCutoffClosestSectClusterConnectionStrategy(rupSet.getFaultSectionDataList(), distAzCalc, jumpDist);
+//		ClusterConnectionStrategy connStrat = new InputJumpsOrDistClusterConnectionStrategy(rupSet.getFaultSectionDataList(), distAzCalc, jumpDist, new ArrayList<>());
+//		RuptureConnectionSearch rsConnSearch = new RuptureConnectionSearch(rupSet, distAzCalc,
+//				1000d, RuptureConnectionSearch.CUMULATIVE_JUMPS_DEFAULT);
+//		rupSet.addModule(ClusterRuptures.instance(rupSet, rsConnSearch));
+//		List<ClusterRupture> rups = rupSet.getModule(ClusterRuptures.class).getAll();
+//		
+//		SegmentationCalculator calc = new SegmentationCalculator(sol, rups, connStrat, distAzCalc, new double[] {6.5d, 7.5d});
+//		calc = calc.combineMultiJumps(true);
+//		
+//		File outputDir = new File("/tmp/test_seg");
+//		calc.plotConnectionRates(outputDir, "conn_rates", "Connection Rates", 800);
+//		calc.plotConnectionFracts(outputDir, "conn_passthrough_rel_min", "Relative Connection Passthrough Rates", 800, RateCombiner.MIN);
+//		calc.plotConnectionFracts(outputDir, "conn_passthrough_rel_max", "Relative Connection Passthrough Rates", 800, RateCombiner.MAX);
+//		calc.plotConnectionFracts(outputDir, "conn_passthrough_rel_avg", "Relative Connection Passthrough Rates", 800, RateCombiner.AVERAGE);
+//		
+//		for (Scalars scalar : Scalars.values()) {
+//			calc.plotFractVsScalars(outputDir, "conn_passthrough_scalars_"+scalar.name(), scalar, false, RateCombiner.values());
+//			calc.plotFractVsScalars(outputDir, "conn_passthrough_scalars_"+scalar.name()+"_log", scalar, true, RateCombiner.values());
+//		}
+		File inputFile = new File("/home/kevin/OpenSHA/UCERF4/batch_inversions/"
+				+ "2022_01_26-nshm23_u3_hybrid_branches-FM3_1-CoulombRupSet-U3_ZENG-Shaw09Mod-DsrUni-SubB1-2000ip/"
+				+ "results_FM3_1_CoulombRupSet_branch_averaged.zip");
+//				+ "2022_01_18-nshm23_draft_branches-no_seg-reweighted_even_fit-FM3_1-U3RupSet-SubB1-5000ip/"
+//				+ "results_FM3_1_U3RupSet_branch_averaged.zip");
+//				+ "node_branch_averaged/MaxDist_MaxDist3km.zip");
+		FaultSystemSolution sol = FaultSystemSolution.load(inputFile);
+		ClusterRuptures cRups = ClusterRuptures.singleStranged(sol.getRupSet());
+		PlausibilityConfiguration config = sol.getRupSet().getModule(PlausibilityConfiguration.class);
+		ClusterConnectionStrategy connStrat = config.getConnectionStrategy();
+		SegmentationCalculator calc = new SegmentationCalculator(sol, cRups.getAll(),
+				connStrat, config.getDistAzCalc(), new double[] { 0d });
 		calc = calc.combineMultiJumps(true);
 		
-		File outputDir = new File("/tmp/test_seg");
-		calc.plotConnectionRates(outputDir, "conn_rates", "Connection Rates", 800);
-		calc.plotConnectionFracts(outputDir, "conn_passthrough_rel_min", "Relative Connection Passthrough Rates", 800, RateCombiner.MIN);
-		calc.plotConnectionFracts(outputDir, "conn_passthrough_rel_max", "Relative Connection Passthrough Rates", 800, RateCombiner.MAX);
-		calc.plotConnectionFracts(outputDir, "conn_passthrough_rel_avg", "Relative Connection Passthrough Rates", 800, RateCombiner.AVERAGE);
-		
-		for (Scalars scalar : Scalars.values()) {
-			calc.plotFractVsScalars(outputDir, "conn_passthrough_scalars_"+scalar.name(), scalar, false, RateCombiner.values());
-			calc.plotFractVsScalars(outputDir, "conn_passthrough_scalars_"+scalar.name()+"_log", scalar, true, RateCombiner.values());
-		}
-		
+		File outputDir = new File("/tmp/");
+		calc.plotShaw07Comparison(outputDir, "shaw_test", true, RateCombiner.MIN);
 	}
 
 }

@@ -1,5 +1,6 @@
 package org.opensha.commons.util.modules;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -9,15 +10,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.ClassUtils;
 import org.opensha.commons.data.Named;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
 
 /**
  * Container of {@link OpenSHA_Module} instances. Modules are added via {@link #addModule(OpenSHA_Module)}
- * and retrieved by their classes via {@link #getModule(Class)}.
+ * and retrieved by their classes via {@link #getModule(Class)}. Modules can be registered as 'available' for
+ * lazy-initialization via the {@link #addAvailableModule(Callable, Class)} method.
  * <p>
  * When you add a module, all super-classes and super-interfaces of your module that also implement
  * {@link OpenSHA_Module} will be registered, so if you have the following classes:
@@ -33,11 +37,17 @@ import com.google.common.base.Preconditions;
  * </pre>
  * 
  * ...and you add a module that is an instance of {@code CustomModuleImpl}, you can retrieve it via either
- * {@code getModule(CustomModuleImpl.class)} or {@code getModule(AbstractCustomModule.class)}. Helper classes or
- * interfaces that should never be mapped to a concrete module implementation should be marked with the
- * {@link ModuleHelper} annotation, and will be excluded from any mappings. 
+ * {@code getModule(CustomModuleImpl.class)} or {@code getModule(AbstractCustomModule.class)}.
  * <p>
- * TODO: consider synchronization
+ * In the case of multiple implementations of a module, only one can be loaded at a time. If modules A and B both
+ * implement module interface C, then either can be retrieved via {@code getModule(C.class)}, and adding either will
+ * evict any modules that implement C. That means that if you add A and then later add B, A will be evicted and only
+ * B will remain loaded.
+ *<p>
+ * Helper classes or interfaces that should never be mapped to a concrete module implementation should be marked with the
+ * {@link ModuleHelper} annotation, and will be excluded from any mappings.
+ * <p>
+ * Get and add methods are thread safe
  * 
  * @author kevin
  *
@@ -143,6 +153,9 @@ public class ModuleContainer<E extends OpenSHA_Module> {
 						return getModule(clazz);
 				}
 			}
+			// if we're here, we failed to load it, but it's possible that it was loaded above in another thread
+			// while we were waiting for the synchronized block. try again
+			return (M)mappings.get(clazz);
 		}
 		return (M)module;
 	}
@@ -248,12 +261,12 @@ public class ModuleContainer<E extends OpenSHA_Module> {
 	private void mapModule(E module, Class<? extends OpenSHA_Module> clazz) {
 		Preconditions.checkState(clazz.getAnnotation(ModuleHelper.class) == null,
 				"Cannot map a class that implements @ModuleHelper: %s", clazz.getName());
-		if (mappings.containsKey(clazz))
-			debug("Overriding module type '"+clazz.getName()+"' with: "+module.getName());
+		Preconditions.checkState(OpenSHA_Module.class.isAssignableFrom(clazz), "%s is not an OpenSHA_Module", clazz);
+		boolean override = mappings.put((Class<E>)clazz, module) != null;
+		if (override)
+			debug("Overrode module type '"+clazz.getName()+"' with: "+module.getName());
 		else
-			debug("Mapping module type '"+clazz.getName()+"' to: "+module.getName());
-		Preconditions.checkState(OpenSHA_Module.class.isAssignableFrom(clazz));
-		mappings.put((Class<E>)clazz, module);
+			debug("Mapped module type '"+clazz.getName()+"' to: "+module.getName());
 	}
 	
 	/**
@@ -322,18 +335,45 @@ public class ModuleContainer<E extends OpenSHA_Module> {
 	/**
 	 * Adds an available module that will be lazily loaded when {@link ModuleContainer#getModule(Class)} or
 	 * {@link ModuleContainer#hasModule(Class)} is called and no module is presently loaded that matches the given class.
+	 * <p>
+	 * This will also remove any already loaded modules that map to the given class, otherwise this available module
+	 * could be shadowed. If you want to attach an available module anyway even if a match is already loaded, use
+	 * {@link #addAvailableModule(Callable, Class, boolean)}, but note that the available module will only ever be loaded
+	 * if the the loaded module is first removed. If you simply want to offer an available module that is only kept if
+	 * no match yet exists, such as a default implementation, use {@link #offerAvailableModule(Callable, Class)}.
 	 * 
 	 * @param call
 	 * @param moduleClass
 	 */
 	@SuppressWarnings("unchecked")
 	public synchronized <M extends E> void addAvailableModule(Callable<? extends OpenSHA_Module> call, Class<M> moduleClass) {
+		addAvailableModule(call, moduleClass, true);
+	}
+	
+	/**
+	 * Adds an available module that will be lazily loaded when {@link ModuleContainer#getModule(Class)} or
+	 * {@link ModuleContainer#hasModule(Class)} is called and no module is presently loaded that matches the given class.
+	 * 
+	 * @param call
+	 * @param moduleClass
+	 * @param removeMatchingLoaded if true, any already loaded classes that map to the given class will be removed,
+	 * otherwise this module will not replace any already loaded modules.
+	 */
+	@SuppressWarnings("unchecked")
+	public synchronized <M extends E> void addAvailableModule(Callable<? extends OpenSHA_Module> call,
+			Class<M> moduleClass, boolean removeMatchingLoaded) {
 		List<Class<? extends OpenSHA_Module>> assignableClasses = getAssignableClasses(moduleClass);
 		
 		// fully remove any duplicate associations
+		if (removeMatchingLoaded)
+			// this removes any already loaded module that is assignable from any class we are about to map
+			for (Class<? extends OpenSHA_Module> clazz : assignableClasses)
+				removeModuleInstances(clazz);
 		// this removes any available module that is assignable from any class we are about to map
 		for (Class<? extends OpenSHA_Module> clazz : assignableClasses)
 			removeAvailableModuleInstances(clazz);
+		
+//		System.out.println("Adding available module with class: "+moduleClass);
 		
 		availableModules.add((Callable<E>)call);
 		
@@ -394,23 +434,26 @@ public class ModuleContainer<E extends OpenSHA_Module> {
 	/**
 	 * Attempts to load the given available module
 	 * 
-	 * @param call (must have already been registered via {@linkp #addAvailableModule(Callable, Class)})
+	 * @param call (must have already been registered via {@link #addAvailableModule(Callable, Class)})
 	 * @return true if loading succeeded, otherwise false
 	 * @throws IllegalStateException if call is not already registered as an available module
 	 */
 	public synchronized boolean loadAvailableModule(Callable<? extends E> call) {
 		Preconditions.checkState(availableModules.remove(call));
 		E module = null;
+		Stopwatch watch = Stopwatch.createStarted();
 		try {
 			debug("Lazily loading available module...");
 			module = call.call();
+			double secs = watch.elapsed(TimeUnit.MILLISECONDS)/1000d;
+			debug("Took "+secsDF.format(secs)+" s to load "+(module == null ? "null" : module.getName()));
 		} catch (Exception e) {
 			e.printStackTrace();
 			debug("WARNING: failed to lazily load a module (see exception above)", true);
 		}
+		watch.stop();
 		
-		// remove this available module, whether or not it was successful
-		availableModules.remove(call);
+		// remove mappings to this available module, whether or not it was successful
 		List<Class<? extends E>> oldMappings = new ArrayList<>();
 		for (Class<? extends E> oClazz : availableMappings.keySet())
 			if (availableMappings.get(oClazz).equals(call))
@@ -427,16 +470,18 @@ public class ModuleContainer<E extends OpenSHA_Module> {
 		return false;
 	}
 	
+	private static DecimalFormat secsDF = new DecimalFormat("0.##"); 
+	
 	@SuppressWarnings("unchecked")
 	private void mapAvailableModule(Callable<? extends OpenSHA_Module> call, Class<? extends OpenSHA_Module> clazz) {
 		Preconditions.checkState(clazz.getAnnotation(ModuleHelper.class) == null,
 				"Cannot map a class that implements @ModuleHelper: %s", clazz.getName());
-		if (availableMappings.containsKey(clazz))
-			debug("Overriding available module with type: "+clazz.getName());
+		Preconditions.checkState(OpenSHA_Module.class.isAssignableFrom(clazz), "%s is not an OpenSHA_Module", clazz);
+		boolean override = availableMappings.put((Class<E>)clazz, (Callable<E>)call) != null;
+		if (override)
+			debug("Overrode available module with type: "+clazz.getName());
 		else
-			debug("Mapping available module with type: "+clazz.getName());
-		Preconditions.checkState(OpenSHA_Module.class.isAssignableFrom(clazz));
-		availableMappings.put((Class<E>)clazz, (Callable<E>)call);
+			debug("Mapped available module with type: "+clazz.getName());
 	}
 	
 	/**
@@ -458,7 +503,10 @@ public class ModuleContainer<E extends OpenSHA_Module> {
 		}
 		
 		for (Callable<E> call : removeCalls) {
-			Preconditions.checkState(availableModules.remove(call), "Callable already removed?");
+			// don't check that it was removed, can be removed in edge case where matching module was added
+			// during lazy load
+			availableModules.remove(call);
+//			Preconditions.checkState(availableModules.remove(call), "Callable already removed?");
 			Preconditions.checkState(removeAvailableMappings(call), "No mappings existed to callable");
 			ret = true;
 		}
@@ -513,35 +561,64 @@ public class ModuleContainer<E extends OpenSHA_Module> {
 	 * @return list of matching modules (will be empty if no matches)
 	 */
 	public synchronized List<E> getModulesAssignableTo(Class<?> type, boolean loadAvailable) {
+		return getModulesAssignableTo(type, loadAvailable, null);
+	}
+	
+	private boolean isSkip(Class<?> type, Collection<Class<? extends OpenSHA_Module>> skipTypes) {
+		if (skipTypes == null)
+			return false;
+		for (Class<? extends OpenSHA_Module> skipType : skipTypes) {
+			if (skipType.isAssignableFrom(type))
+				return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * Returns all modules that are assignable to the given type. For example, if you wanted to retrieve the
+	 * set of modules that implement {@link ArchivableModule}, call this method with that type. The given
+	 * type can be any interface or abstract class.
+	 * 
+	 * @param type
+	 * @param loadAvailable if true, any available matching but not-yet loaded modules will be loaded first
+	 * @param skipTypes specific types that should be skipped, or null if none
+	 * @return list of matching modules (will be empty if no matches)
+	 */
+	public synchronized List<E> getModulesAssignableTo(Class<?> type, boolean loadAvailable,
+			Collection<Class<? extends OpenSHA_Module>> skipTypes) {
+		if (loadAvailable) {
+			// first load any available. do this first, as loading one available can also load other modules
+			Map<Callable<E>, Class<? extends E>> matchingCalls = new HashMap<>();
+			for (Class<? extends E> moduleClass : availableMappings.keySet()) {
+				Callable<E> call = availableMappings.get(moduleClass);
+				if (!matchingCalls.containsKey(call) && type.isAssignableFrom(moduleClass) && !isSkip(moduleClass, skipTypes))
+					matchingCalls.put(call, moduleClass);
+			}
+			
+			for (Callable<E> call : matchingCalls.keySet()) {
+//				Class<? extends E> callClass = matchingCalls.get(call);
+//				System.out.println("Loading matching call with class: "+callClass);
+				// check that it's still an available module
+				// loading any previous available could have already loaded this one, which could have removed
+				// it from the available modules list
+				if (availableModules.contains(call) && loadAvailableModule(call)) {
+					E module = getModule(matchingCalls.get(call));
+					Preconditions.checkNotNull(module);
+				}
+			}
+		}
+		
 		List<E> ret = new ArrayList<>();
 		
 		// check loaded modules
 //		System.out.println("Looking for modules assignable to "+type.getName());
 		for (E module : getModules(false)) {
 //			System.out.println("\tTesting module "+module.getName()+" of type "+module.getClass());
-			if (type.isAssignableFrom(module.getClass())) {
+			if (type.isAssignableFrom(module.getClass()) && !isSkip(type, skipTypes)) {
 //				System.out.println("\t\tMATCH!");
 				ret.add(module);
 //			} else {
 //				System.out.println("\t\tnot a match");
-			}
-		}
-		
-		if (loadAvailable) {
-			// check available modules
-			Map<Callable<E>, Class<? extends E>> matchingCalls = new HashMap<>();
-			for (Class<? extends E> moduleClass : availableMappings.keySet()) {
-				Callable<E> call = availableMappings.get(moduleClass);
-				if (!matchingCalls.containsKey(call) && type.isAssignableFrom(moduleClass))
-					matchingCalls.put(call, moduleClass);
-			}
-			
-			for (Callable<E> call : matchingCalls.keySet()) {
-				if (loadAvailableModule(call)) {
-					E module = getModule(matchingCalls.get(call));
-					Preconditions.checkNotNull(module);
-					ret.add(module);
-				}
 			}
 		}
 		

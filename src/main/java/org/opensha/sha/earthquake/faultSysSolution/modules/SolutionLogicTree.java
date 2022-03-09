@@ -1,10 +1,8 @@
 package org.opensha.sha.earthquake.faultSysSolution.modules;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -14,8 +12,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
@@ -35,6 +31,7 @@ import org.opensha.sha.earthquake.faultSysSolution.FaultSystemRupSet;
 import org.opensha.sha.earthquake.faultSysSolution.FaultSystemRupSet.RuptureProperties;
 import org.opensha.sha.earthquake.faultSysSolution.FaultSystemSolution;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.completion.AnnealingProgress;
+import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.PlausibilityConfiguration;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.GeoJSONFaultReader;
 import org.opensha.sha.earthquake.faultSysSolution.util.BranchAverageSolutionCreator;
 import org.opensha.sha.faultSurface.FaultSection;
@@ -43,14 +40,10 @@ import com.google.common.base.Preconditions;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import scratch.UCERF3.AverageFaultSystemSolution;
-import scratch.UCERF3.FaultSystemSolutionFetcher;
+import scratch.UCERF3.U3FaultSystemSolutionFetcher;
 import scratch.UCERF3.enumTreeBranches.FaultModels;
-import scratch.UCERF3.enumTreeBranches.MaxMagOffFault;
-import scratch.UCERF3.enumTreeBranches.MomentRateFixes;
-import scratch.UCERF3.enumTreeBranches.SpatialSeisPDF;
 import scratch.UCERF3.griddedSeismicity.AbstractGridSourceProvider;
-import scratch.UCERF3.griddedSeismicity.UCERF3_GridSourceGenerator;
+import scratch.UCERF3.inversion.U3InversionConfigFactory;
 import scratch.UCERF3.logicTree.U3LogicTreeBranch;
 import scratch.UCERF3.logicTree.U3LogicTreeBranchNode;
 
@@ -83,45 +76,6 @@ public class SolutionLogicTree extends AbstractLogicTreeModule {
 		public FaultSystemSolution processSolution(FaultSystemSolution sol, LogicTreeBranch<?> branch);
 	}
 	
-	public static class UCERF3_SolutionProcessor implements SolutionProcessor {
-
-		@Override
-		public FaultSystemRupSet processRupSet(FaultSystemRupSet rupSet, LogicTreeBranch<?> branch) {
-//			System.out.println("Start process");
-			rupSet = FaultSystemRupSet.buildFromExisting(rupSet).u3BranchModules(asU3Branch(branch)).build();
-//			System.out.println("End process");
-			return rupSet;
-		}
-
-		@Override
-		public FaultSystemSolution processSolution(FaultSystemSolution sol, LogicTreeBranch<?> branch) {
-			sol.addAvailableModule(new Callable<SubSeismoOnFaultMFDs>() {
-
-				@Override
-				public SubSeismoOnFaultMFDs call() throws Exception {
-					FaultSystemRupSet rupSet = sol.getRupSet();
-					return new SubSeismoOnFaultMFDs(
-							rupSet.requireModule(InversionTargetMFDs.class).getOnFaultSubSeisMFDs().getAll());
-				}
-			}, SubSeismoOnFaultMFDs.class);
-			sol.addAvailableModule(new Callable<GridSourceProvider>() {
-
-				@Override
-				public GridSourceProvider call() throws Exception {
-					FaultSystemRupSet rupSet = sol.getRupSet();
-					return new UCERF3_GridSourceGenerator(sol, branch.getValue(SpatialSeisPDF.class),
-							branch.getValue(MomentRateFixes.class),
-							rupSet.requireModule(InversionTargetMFDs.class),
-							sol.requireModule(SubSeismoOnFaultMFDs.class),
-							branch.getValue(MaxMagOffFault.class).getMaxMagOffFault(),
-							rupSet.requireModule(FaultGridAssociations.class));
-				}
-			}, GridSourceProvider.class);
-			return sol;
-		}
-		
-	}
-	
 	private static U3LogicTreeBranch asU3Branch(LogicTreeBranch<?> branch) {
 		if (branch instanceof U3LogicTreeBranch)
 			return (U3LogicTreeBranch)branch;
@@ -136,18 +90,18 @@ public class SolutionLogicTree extends AbstractLogicTreeModule {
 	
 	public static class UCERF3 extends AbstractExternalFetcher {
 
-		private FaultSystemSolutionFetcher oldFetcher;
+		private U3FaultSystemSolutionFetcher oldFetcher;
 
 		private UCERF3() {
-			super(new UCERF3_SolutionProcessor(), null);
+			super(new U3InversionConfigFactory.UCERF3_SolutionProcessor(), null);
 		}
 		
 		public UCERF3(LogicTree<?> logicTree) {
-			super(new UCERF3_SolutionProcessor(), logicTree);
+			super(new U3InversionConfigFactory.UCERF3_SolutionProcessor(), logicTree);
 		}
 		
-		public UCERF3(FaultSystemSolutionFetcher oldFetcher) {
-			super(new UCERF3_SolutionProcessor(),
+		public UCERF3(U3FaultSystemSolutionFetcher oldFetcher) {
+			super(new U3InversionConfigFactory.UCERF3_SolutionProcessor(),
 					LogicTree.fromExisting(U3LogicTreeBranch.getLogicTreeLevels(), oldFetcher.getBranches()));
 			this.oldFetcher = oldFetcher;
 		}
@@ -249,6 +203,7 @@ public class SolutionLogicTree extends AbstractLogicTreeModule {
 					}
 					
 				};
+				solTree.setLogicTreeLevels(levels);
 				archive.addModule(solTree);
 				// begin asynchronous module archive write
 				endArchiveWriteFuture = CompletableFuture.runAsync(new Runnable() {
@@ -459,6 +414,30 @@ public class SolutionLogicTree extends AbstractLogicTreeModule {
 			CSV_BackedModule.writeToArchive(progress.getCSV(), zout, entryPrefix, progressFile);
 			writtenFiles.add(progressFile);
 		}
+		
+		InversionMisfitProgress misfitProgress = sol.getModule(InversionMisfitProgress.class);
+		
+		if (misfitProgress != null) {
+			String progressFile = getBranchFileName(branch, prefix,
+					InversionMisfitProgress.MISFIT_PROGRESS_FILE_NAME, true);
+			Preconditions.checkState(!writtenFiles.contains(progressFile));
+			CSV_BackedModule.writeToArchive(misfitProgress.getCSV(), zout, entryPrefix, progressFile);
+			writtenFiles.add(progressFile);
+		}
+		
+		// use rupture-sections file to figure out which things affect plausibility
+		List<? extends LogicTreeLevel<?>> rupSectLevels = getLevelsAffectingFile(
+				FaultSystemRupSet.RUP_SECTS_FILE_NAME, true);
+		String plausibilityFile = getBranchFileName(branch, prefix,
+				PlausibilityConfiguration.JSON_FILE_NAME, rupSectLevels);
+		if (!writtenFiles.contains(plausibilityFile)) {
+			PlausibilityConfiguration plausibility = rupSet.getModule(PlausibilityConfiguration.class);
+			
+			if (plausibility != null) {
+				plausibility.writeToArchive(zout, entryPrefix, plausibilityFile);
+				writtenFiles.add(plausibilityFile);
+			}
+		}
 	}
 	
 	// cache files
@@ -604,6 +583,26 @@ public class SolutionLogicTree extends AbstractLogicTreeModule {
 			sol.addModule(progress);
 		}
 		
+		String misfitProgressFile = getBranchFileName(branch, InversionMisfitProgress.MISFIT_PROGRESS_FILE_NAME, true);
+		if (misfitProgressFile != null && zip.getEntry(misfitProgressFile) != null) {
+			CSVFile<String> progressCSV = CSV_BackedModule.loadFromArchive(zip, entryPrefix, misfitProgressFile);
+			InversionMisfitProgress progress = new InversionMisfitProgress(progressCSV);
+			sol.addModule(progress);
+		}
+		
+		// use rupture-sections file to figure out which things affect plausibility
+		List<? extends LogicTreeLevel<?>> rupSectLevels = getLevelsAffectingFile(
+				FaultSystemRupSet.RUP_SECTS_FILE_NAME, true);
+		String plausibilityFile = getBranchFileName(branch, PlausibilityConfiguration.JSON_FILE_NAME, rupSectLevels);
+		if (plausibilityFile != null && zip.getEntry(plausibilityFile) != null) {
+			BufferedInputStream zin = FileBackedModule.getInputStream(zip, entryPrefix, plausibilityFile);
+			InputStreamReader reader = new InputStreamReader(zin);
+			PlausibilityConfiguration plausibility = PlausibilityConfiguration.readJSON(
+					reader, rupSet.getFaultSectionDataList());
+			reader.close();
+			rupSet.addModule(plausibility);
+		}
+		
 		return sol;
 	}
 	
@@ -622,7 +621,7 @@ public class SolutionLogicTree extends AbstractLogicTreeModule {
 	}
 	
 	public FaultSystemSolution calcBranchAveraged() throws IOException {
-		BranchAverageSolutionCreator baCreator = new BranchAverageSolutionCreator();
+		BranchAverageSolutionCreator baCreator = new BranchAverageSolutionCreator(getLogicTree().getWeightProvider());
 		
 		for (LogicTreeBranch<?> branch : getLogicTree().getBranches()) {
 			FaultSystemSolution sol = forBranch(branch);
@@ -686,6 +685,11 @@ public class SolutionLogicTree extends AbstractLogicTreeModule {
 			try {
 				clazz = Class.forName(className);
 			} catch(Exception e) {
+				if (className.endsWith("$UCERF3_SolutionProcessor")) {
+					System.err.println("WARNING: found reference to previous oudated solution processor, changing to new class");
+					processor = new U3InversionConfigFactory.UCERF3_SolutionProcessor();
+					return;
+				}
 				System.err.println("WARNING: Skipping solution processor', couldn't locate class: "+className);
 				return;
 			}
@@ -740,7 +744,7 @@ public class SolutionLogicTree extends AbstractLogicTreeModule {
 			System.out.println("Solution processor type: "+tree.processor.getClass().getName());
 		
 		FileBuilder builder = new FileBuilder(tree.processor, new File("/tmp/sol_tree_test.zip"));
-		BranchAverageSolutionCreator avgBuilder = new BranchAverageSolutionCreator();
+		BranchAverageSolutionCreator avgBuilder = new BranchAverageSolutionCreator(tree.getLogicTree().getWeightProvider());
 		for (LogicTreeBranch<?> branch : tree.getLogicTree()) {
 			if (Math.random() < 0.05) {
 				FaultSystemSolution sol = tree.forBranch(branch);
