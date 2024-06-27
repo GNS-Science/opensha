@@ -19,6 +19,7 @@ import org.opensha.sha.earthquake.faultSysSolution.reports.ReportMetadata;
 import org.opensha.sha.earthquake.faultSysSolution.reports.ReportPageGen;
 import org.opensha.sha.earthquake.faultSysSolution.reports.RupSetMetadata;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.ClusterRupture;
+import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.report.MultiRupturePlot;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.RupCartoonGenerator;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.SectionDistanceAzimuthCalculator;
 import org.opensha.sha.faultSurface.FaultSection;
@@ -31,6 +32,8 @@ import java.text.DecimalFormat;
 import java.util.*;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
+import java.util.stream.Stream;
 
 public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
 
@@ -38,7 +41,8 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
     final static double STIFFNESS_THRESHOLD = 0.75;
 
     final static String PREFIX = "jointStiffness";
-    DecimalFormat oDF = new DecimalFormat("0.###");
+    DecimalFormat o3DF = new DecimalFormat("0.###");
+    DecimalFormat o1DF = new DecimalFormat("0.#");
 
     AggregatedStiffnessCalculator stiffnessCalc;
     SectionDistanceAzimuthCalculator disAzCalc;
@@ -50,9 +54,9 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
                 stiffnessCalc,
                 true,
                 AggregatedStiffnessCalculator.AggregationMethod.FLATTEN,
-                AggregatedStiffnessCalculator.AggregationMethod.NUM_POSITIVE,
                 AggregatedStiffnessCalculator.AggregationMethod.SUM,
-                AggregatedStiffnessCalculator.AggregationMethod.NORM_BY_COUNT);
+                AggregatedStiffnessCalculator.AggregationMethod.SUM,
+                AggregatedStiffnessCalculator.AggregationMethod.SUM);
     }
 
     public static class RuptureProperties {
@@ -97,6 +101,7 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
         this.disAzCalc = new SectionDistanceAzimuthCalculator(rupSet.getFaultSectionDataList());
         RupCartoonGenerator.SectionCharacteristicsFunction rupToonFun = RupCartoonGenerator.sectCharFun;
         List<String> lines = new ArrayList<>();
+
         ClusterRuptures cRups = rupSet.requireModule(ClusterRuptures.class);
         StiffnessCalcModule stiffness = rupSet.requireModule(StiffnessCalcModule.class);
         setStiffnessCalc(stiffness.getStiffnessCalculator());
@@ -112,6 +117,9 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
             property.subToCrustalStiffness = stiffnessCalc.calc(property.subduction, property.crustal);
             property.crustalToSubStiffness = stiffnessCalc.calc(property.crustal, property.subduction);
         });
+
+        lines.add("Stiffness measure in this section: " + stiffnessCalc.toString());
+        lines.add("");
 
         lines.add("### Subduction to Crustal Stiffness");
         lines.add("");
@@ -134,7 +142,7 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
                 collect(Collectors.toList());
 
         if (!subductionOnly.isEmpty()) {
-            lines.add("### Only Subduction As Source Above Stiffness Threshold of " + oDF.format(STIFFNESS_THRESHOLD));
+            lines.add("### Only Subduction As Source Above Stiffness Threshold of " + o3DF.format(STIFFNESS_THRESHOLD));
             lines.add("Ruptures where subduction as source is above threshold and crustal as source is below threshold.");
             lines.add("");
             lines.addAll(plotForValue(subductionOnly, p -> p.crustal.size() + p.subduction.size(), resourcesDir, relPathToResources, "subToCru"));
@@ -146,7 +154,7 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
                 collect(Collectors.toList());
 
         if (!crustalOnly.isEmpty()) {
-            lines.add("### Only Crustal As Source Above Stiffness Threshold of " + oDF.format(STIFFNESS_THRESHOLD));
+            lines.add("### Only Crustal As Source Above Stiffness Threshold of " + o3DF.format(STIFFNESS_THRESHOLD));
             lines.add("Ruptures where crustal as source is above threshold and subduction as source is below threshold.");
             lines.add("");
             lines.addAll(plotForValue(crustalOnly, p -> p.crustal.size() + p.subduction.size(), resourcesDir, relPathToResources, "cruToSub"));
@@ -157,7 +165,7 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
                 collect(Collectors.toList());
 
         if (!both.isEmpty()) {
-            lines.add("### Both Crustal and Subduction As Source Are Above Stiffness Threshold of " + oDF.format(STIFFNESS_THRESHOLD));
+            lines.add("### Both Crustal and Subduction As Source Are Above Stiffness Threshold of " + o3DF.format(STIFFNESS_THRESHOLD));
             lines.add("Ruptures where both crustal as source is above threshold and subduction as source is above threshold.");
             lines.add("");
             lines.addAll(plotForValue(both, p -> p.crustal.size() + p.subduction.size(), resourcesDir, relPathToResources, "subToCru"));
@@ -201,7 +209,7 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
 
         table.initNewLine();
         for (int i = 0; i < percentiles.size(); i++) {
-            table.addColumn(formatPercentile(percentiles.get(i)) + oDF.format(percentileValues.get(i)));
+            table.addColumn(formatPercentile(percentiles.get(i)) + o3DF.format(percentileValues.get(i)));
         }
         table.finalizeLine();
 
@@ -211,7 +219,7 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
             String relOutputDir = PREFIX + prop.index;
             File outputDir = new File(resourcesDir, relOutputDir);
             outputDir.mkdirs();
-            plotRupturePage(prop, outputDir);
+            makeRupturePage(prop, outputDir);
             File relPageDir = new File(relPathToResources, relOutputDir);
             table.addColumn("[<img src=\"" + new File(relPageDir, prop.plots.get(thumbnail)) + "\" />](" + new File(relPageDir, "index.html") + ")");
         }
@@ -226,27 +234,85 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
         return results;
     }
 
-    protected void plotRupturePage(RuptureProperties prop, File outputDir) throws IOException {
+    protected void makeRupturePage(RuptureProperties prop, File outputDir) throws IOException {
+        String rupTitle = "Rupture " + prop.index + " ";
+
+        // set up plots
+
+        List<MultiRupturePlot> allPlots = new ArrayList<>();
+        MultiRupturePlot subToCruPlot = new MultiRupturePlot("SubAsSource", prop.rupture, rupTitle + "(subduction as source)", MultiRupturePlot.subductionAsSource(stiffnessCalc, prop), stiffnessCalc.toString());
+        MultiRupturePlot cruToSubPlot = new MultiRupturePlot("CruAsSource", prop.rupture, rupTitle + "(crustal as source)", MultiRupturePlot.crustalAsSource(stiffnessCalc, prop), stiffnessCalc.toString());
+        List<Double> maxDistances = List.of(5.0, 15.0, 50.0, 100.0, 200.0);
+        List<MultiRupturePlot> subDistancePlots = new ArrayList<>();
+        for (Double maxDist : maxDistances) {
+            subDistancePlots.add(new MultiRupturePlot("SubAsSource" + maxDist, prop.rupture, rupTitle + "(subduction as source) " + maxDist + "km", MultiRupturePlot.subductionAsSource(stiffnessCalc, prop, maxDist, disAzCalc), stiffnessCalc.toString()));
+        }
+        List<MultiRupturePlot> cruDistancePlots = new ArrayList<>();
+        for (Double maxDist : maxDistances) {
+            cruDistancePlots.add(new MultiRupturePlot("CruAsSource" + maxDist, prop.rupture, rupTitle + "(crustal as source) " + maxDist + "km", MultiRupturePlot.crustalAsSource(stiffnessCalc, prop, maxDist, disAzCalc), stiffnessCalc.toString()));
+        }
+        allPlots.add(subToCruPlot);
+        allPlots.add(cruToSubPlot);
+        allPlots.addAll(subDistancePlots);
+        allPlots.addAll(cruDistancePlots);
+
+        prop.plots.put("subToCru", subToCruPlot.getFileName());
+        prop.plots.put("cruToSub", cruToSubPlot.getFileName());
+
+        // work out CPT to be able to use the same one across all plots
+
+        double[] values = allPlots.stream().flatMapToDouble(p -> DoubleStream.of(p.min, p.max)).toArray();
+
+        double min = Arrays.stream(values).min().getAsDouble();
+        double max = Arrays.stream(values).max().getAsDouble();
+        if (min >= 0 && min <= 1 && max >= 0 && max <= 1) {
+            min = 0;
+            max = 1;
+        }
+        if (min < 0 && max > 0) {
+            double dist = Math.max(-min, max);
+            min = -dist;
+            max = dist;
+        }
+        CPT cpt = min >= 0 ?
+                GMT_CPT_Files.RAINBOW_UNIFORM.instance().rescale(min, max) :
+                GMT_CPT_Files.DIVERGENT_RYB.instance().reverse().rescale(min, max);
+
+        // create all plots
+
+        allPlots.forEach(p -> {
+            try {
+                p.plot(outputDir, cpt);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // create markdown
+
         List<String> lines = new ArrayList<>();
-        lines.add("## Stiffness for Rupture " + prop.index);
-        String plotSubToCru = plotSubductionAsSource(outputDir, "jointStiffnessSubOnly90", prop, "Rupture " + prop.index);
-        prop.plots.put("subToCru", plotSubToCru);
-        String plotCruToSub = plotSubductionAsReceivers(outputDir, "jointStiffnessSubOnly90", prop, "Rupture " + prop.index);
-        prop.plots.put("cruToSub", plotCruToSub);
+
+        lines.add("## Rupture " + prop.index);
         lines.add("");
+        lines.add("Stiffness data: " + stiffnessCalc.toString());
+        lines.add("");
+
         MarkdownUtils.TableBuilder table = MarkdownUtils.tableBuilder();
         table.addLine("Subduction to crustal stiffness", "Crustal to subduction stiffness");
         table.initNewLine();
         table.addColumn("Subduction sections in this column show the stiffness of the section as source and all crustal sections as receivers. Crustal sections show the stiffness of the section as sole receiver with all subduction sections as source.");
         table.addColumn("Subduction sections in this column show the stiffness of the section as receiver and all crustal sections as source. Crustal sections show the stiffness of the section as sole source with all subduction sections as receivers.");
         table.finalizeLine();
-        table.addLine("![subOnly90](" + plotSubToCru + ")", "![subOnly90](" + plotCruToSub + ")");
-        table.addLine("Total: " + oDF.format(prop.subToCrustalStiffness), "Total: " + oDF.format(prop.crustalToSubStiffness));
+        table.addLine("![subToCruPlot](" + subToCruPlot.getFileName() + ")", "![cruToSubPlot](" + cruToSubPlot.getFileName() + ")");
+        table.addLine(
+                subToCruPlot.getStats() + "Total: " + o3DF.format(prop.subToCrustalStiffness),
+                cruToSubPlot.getStats() + "Total: " + o3DF.format(prop.crustalToSubStiffness));
         lines.addAll(table.wrap(2, 1).build());
+
         lines.add("");
         lines.add("- Crustal sections: " + prop.crustal.size());
         lines.add("- Subduction sections: " + prop.subduction.size());
-        lines.add("- Rake: " + rupSet.getAveRakeForRup(prop.index));
+        lines.add("- Rake: " + o1DF.format(rupSet.getAveRakeForRup(prop.index)));
         lines.add("");
         lines.add("#### Parent Faults");
         for (String parent : getParentNames(prop.rupture)) {
@@ -254,7 +320,6 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
         }
         lines.add("");
 
-        List<Double> maxDistances = List.of(5.0, 15.0, 50.0, 100.0, 200.0);
         table = MarkdownUtils.tableBuilder();
         table.initNewLine();
         for (Double maxDist : maxDistances) {
@@ -262,29 +327,31 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
         }
         table.finalizeLine();
         table.initNewLine();
-        for (Double maxDist : maxDistances) {
-            table.addColumn("![maxdist" + maxDist + "](" + plotSubductionAsSource(outputDir, "maxdist" + maxDist, prop, "Rupture " + prop.index, maxDist) + ")");
+        for (MultiRupturePlot plot : subDistancePlots) {
+            table.addColumn("![maxdist](" + plot.getFileName() + ")");
         }
         table.finalizeLine();
         table.initNewLine();
-        for (Double maxDist : maxDistances) {
-            table.addColumn(oDF.format(calc(prop.subduction, prop.crustal, maxDist)));
+        for (int i = 0; i < maxDistances.size(); i++) {
+            table.addColumn(subDistancePlots.get(i).getStats() + "Total: " + o3DF.format(calc(prop.subduction, prop.crustal, maxDistances.get(i))));
         }
         table.finalizeLine();
 
-        for (Double maxDist : maxDistances) {
-            table.addColumn("![maxdist" + maxDist + "](" + plotCrustalAsSource(outputDir, "maxdist" + maxDist, prop, "Rupture " + prop.index, maxDist) + ")");
+        table.initNewLine();
+        for (MultiRupturePlot plot : cruDistancePlots) {
+            table.addColumn("![maxdist](" + plot.getFileName() + ")");
         }
         table.finalizeLine();
         table.initNewLine();
-        for (Double maxDist : maxDistances) {
-            table.addColumn(oDF.format(calc(prop.crustal, prop.subduction, maxDist)));
+        for (int i = 0; i < maxDistances.size(); i++) {
+            table.addColumn(cruDistancePlots.get(i).getStats() + "Total: " + o3DF.format(calc(prop.crustal, prop.subduction, maxDistances.get(i))));
         }
         table.finalizeLine();
 
         lines.addAll(table.wrap(5, 1).build());
 
         MarkdownUtils.writeHTML(lines, new File(outputDir, "index.html"));
+
     }
 
     @Override
@@ -303,7 +370,23 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
 
     public String plot(File outputDir, String prefix, ClusterRupture rup, String title, ValueForSection valueForSection) throws IOException {
 
-        CPT cpt = GMT_CPT_Files.RAINBOW_UNIFORM.instance();
+        double[] values = rup.buildOrderedSectionList().stream().mapToDouble(valueForSection::getValue).toArray();
+        double min = Arrays.stream(values).min().getAsDouble();
+        double max = Arrays.stream(values).max().getAsDouble();
+
+        if (min >= 0 && min <= 1 && max >= 0 && max <= 1) {
+            min = 0;
+            max = 1;
+        }
+        if (min < 0 && max > 0) {
+            double dist = Math.max(-min, max);
+            min = -dist;
+            max = dist;
+        }
+
+        CPT cpt = min >= 0 ?
+                GMT_CPT_Files.RAINBOW_UNIFORM.instance().rescale(min, max) :
+                GMT_CPT_Files.DIVERGING_RAINBOW.instance().rescale(min, max);
 
         RupCartoonGenerator.sectCharFun = (section, traceChar, outlineChar) -> {
             List<PlotCurveCharacterstics> chars = new ArrayList<>();
@@ -312,7 +395,7 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
             if (section.getSectionName().contains("row:")) {
                 double stiffness = valueForSection.getValue(section);
                 chars.add(null);
-                if (stiffness >= 0) {
+                if (stiffness != 0) {
                     chars.add(new PlotCurveCharacterstics(PlotLineType.POLYGON_SOLID, 1, cpt.getColor((float) stiffness)));
                 } else {
                     chars.add(null);
@@ -325,8 +408,10 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
             return chars;
         };
         PlotSpec spec = RupCartoonGenerator.buildRupturePlot(rup, title, false, true);
+
+        double tickUnit = min == 0 && max == 1 ? 0.25 : (max - min) / 4;
         PaintScaleLegend cptLegend = GraphPanel.getLegendForCPT(cpt, "stiffness",
-                22, 18, 0.25, RectangleEdge.BOTTOM);
+                22, 18, tickUnit, RectangleEdge.BOTTOM);
 
         spec.addSubtitle(cptLegend);
 
@@ -352,79 +437,12 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
         return sum / count;
     }
 
-    public List<FaultSection> filterNear(FaultSection origin, List<FaultSection> candidates, double maxDistance) {
-        return candidates.stream().filter(s -> disAzCalc.getDistance(origin, s) <= maxDistance).collect(Collectors.toList());
-    }
-
-    public String plotSubductionAsSource(File outputDir, String prefix, RuptureProperties prop, String title, double maxDist) throws IOException {
-        return plot(outputDir,
-                prefix + "SubAsSource",
-                prop.rupture,
-                title + " (subduction source)",
-                s -> {
-                    if (s.getSectionName().contains("row:")) {
-                        List<FaultSection> receivers = filterNear(s, prop.crustal, maxDist);
-                        if (receivers.isEmpty()) {
-                            return -1;
-                        }
-                        return stiffnessCalc.calc(List.of(s), receivers);
-                    }
-                    List<FaultSection> sources = filterNear(s, prop.subduction, maxDist);
-                    if (sources.isEmpty()) {
-                        return -1;
-                    }
-                    return stiffnessCalc.calc(sources, List.of(s));
-                });
-    }
-
-    public String plotCrustalAsSource(File outputDir, String prefix, RuptureProperties prop, String title, double maxDist) throws IOException {
-        return plot(outputDir,
-                prefix + "CrustalAsSource",
-                prop.rupture,
-                title + " (crustal source)",
-                s -> {
-                    if (s.getSectionName().contains("row:")) {
-                        List<FaultSection> sources = filterNear(s, prop.crustal, maxDist);
-                        if (sources.isEmpty()) {
-                            return -1;
-                        }
-                        return stiffnessCalc.calc(sources, List.of(s));
-                    }
-                    List<FaultSection> receivers = filterNear(s, prop.subduction, maxDist);
-                    if (receivers.isEmpty()) {
-                        return -1;
-                    }
-                    return stiffnessCalc.calc(List.of(s), receivers);
-                });
-    }
-
-
-    public String plotSubductionAsSource(File outputDir, String prefix, RuptureProperties prop, String title) throws IOException {
-        return plot(outputDir,
-                prefix + "SubAsSource",
-                prop.rupture,
-                title + " (subduction source)",
-                s -> s.getSectionName().contains("row:") ?
-                        stiffnessCalc.calc(List.of(s), prop.crustal) :
-                        stiffnessCalc.calc(prop.subduction, List.of(s)));
-    }
-
-    public String plotSubductionAsReceivers(File outputDir, String prefix, RuptureProperties prop, String title) throws IOException {
-        return plot(outputDir,
-                prefix + "SubAsReceivers",
-                prop.rupture,
-                title + " (crustal source)",
-                s -> s.getSectionName().contains("row:") ?
-                        stiffnessCalc.calc(prop.crustal, List.of(s)) :
-                        stiffnessCalc.calc(List.of(s), prop.subduction));
-    }
-
     public static void main(String[] args) throws IOException {
         File file = new File("C:\\tmp\\mergedRupset_5km_cffPatch2km_cff0.75IntsPos_cffNetPositiveBOTH.zip");
         FaultSystemRupSet rupSet = FaultSystemRupSet.load(file);
         ReportMetadata meta = new ReportMetadata(new RupSetMetadata(file.getName(), rupSet));
         List<AbstractRupSetPlot> plots = List.of(new MultiRuptureStiffnessPlot());
-        ReportPageGen report = new ReportPageGen(meta, new File("/tmp/reports/stiffness2"), plots);
+        ReportPageGen report = new ReportPageGen(meta, new File("/tmp/reports/stiffness3-ryb"), plots);
         report.generatePage();
     }
 }
