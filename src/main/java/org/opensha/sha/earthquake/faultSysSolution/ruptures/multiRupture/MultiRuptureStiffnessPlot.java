@@ -442,7 +442,7 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
         FaultSystemRupSet rupSet = FaultSystemRupSet.load(file);
         ReportMetadata meta = new ReportMetadata(new RupSetMetadata(file.getName(), rupSet));
         List<AbstractRupSetPlot> plots = List.of(new MultiRuptureStiffnessPlot());
-        ReportPageGen report = new ReportPageGen(meta, new File("/tmp/reports/stiffness3-ryb"), plots);
+        ReportPageGen report = new ReportPageGen(meta, new File("/tmp/reports/stiffness4-cetr3"), plots);
         report.generatePage();
     }
 }
