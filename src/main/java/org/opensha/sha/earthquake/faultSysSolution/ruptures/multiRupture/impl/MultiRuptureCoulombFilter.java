@@ -37,6 +37,14 @@ public class MultiRuptureCoulombFilter implements MultiRuptureCompatibilityFilte
 		this.directionality = directionality;
 	}
 
+	public AggregatedStiffnessCalculator getAggCalc() {
+		return aggCalc;
+	}
+
+	public float getThreshold() {
+		return threshold;
+	}
+
 	@Override
 	public PlausibilityResult apply(MultiRuptureJump jump, boolean verbose) {
 		ClusterRupture fromRup = jump.fromRupture;
