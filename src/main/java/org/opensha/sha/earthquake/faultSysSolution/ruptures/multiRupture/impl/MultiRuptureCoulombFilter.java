@@ -45,6 +45,55 @@ public class MultiRuptureCoulombFilter implements MultiRuptureCompatibilityFilte
 		return threshold;
 	}
 
+	public List<FaultSection> getSects(ClusterRupture rupture) {
+		List<FaultSection> fromSects = new ArrayList<>(rupture.getTotalNumSects());
+		for (FaultSubsectionCluster cluster : rupture.getClustersIterable())
+			fromSects.addAll(cluster.subSects);
+		return fromSects;
+	}
+
+	public int[] collectStats(MultiRuptureJump jump) {
+		List<FaultSection> fromSects = getSects(jump.fromRupture);
+		List<FaultSection> toSects = getSects(jump.toRupture);
+		int fromSourcePass = 0;
+		int fromTargetPass = 0;
+		for (FaultSection from : fromSects) {
+			boolean sourcePass = aggCalc.calc(List.of(from), toSects) >= threshold;
+			if (sourcePass) {
+				from.getArea(false);
+				fromSourcePass++;
+			}
+			boolean targetPass = aggCalc.calc(toSects, List.of(from)) >= threshold;
+			if (targetPass) {
+				fromTargetPass++;
+			}
+		}
+
+		int toSourcePass = 0;
+		int toTargetPass = 0;
+		for (FaultSection to : toSects) {
+			boolean sourcePass = aggCalc.calc(List.of(to), fromSects) >= threshold;
+			if (sourcePass) {
+				toSourcePass++;
+			}
+			boolean targetPass = aggCalc.calc(fromSects, List.of(to)) >= threshold;
+			if (targetPass) {
+				toTargetPass++;
+			}
+		}
+
+		return new int[]{
+				fromSects.size(),
+				fromSourcePass,
+				fromTargetPass,
+				toSects.size(),
+				toSourcePass,
+				toTargetPass,
+				fromSects.get(0).getSectionName().contains("row:") ? 1 : 0
+		};
+	}
+
+
 	@Override
 	public PlausibilityResult apply(MultiRuptureJump jump, boolean verbose) {
 		ClusterRupture fromRup = jump.fromRupture;
