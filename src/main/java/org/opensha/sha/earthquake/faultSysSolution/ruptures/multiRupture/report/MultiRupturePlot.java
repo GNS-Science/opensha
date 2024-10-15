@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -46,6 +47,9 @@ public class MultiRupturePlot {
         this.valueForSection = valueForSection;
         this.valueUnit = valueUnit;
         this.values = rup.buildOrderedSectionList().stream().map(valueForSection::getValue).filter(Objects::nonNull).mapToDouble(s -> s).toArray();
+        if(title.contains("Rupture 53") && title.contains("everything")) {
+            System.out.println(Arrays.toString(this.values));
+        }
         this.min = StatUtils.min(values);
         this.max = StatUtils.max(values);
         if (min >= 0 && max <= 1) {
@@ -108,6 +112,16 @@ public class MultiRupturePlot {
         return s -> s.getSectionName().contains("row:") ?
                 stiffnessCalculator.calc(List.of(s), prop.crustal) :
                 stiffnessCalculator.calc(prop.subduction, List.of(s));
+    }
+
+    public static ValueForSection everythingAsSource(
+            AggregatedStiffnessCalculator stiffnessCalculator,
+            MultiRuptureStiffnessPlot.RuptureProperties prop) {
+        List<FaultSection> source = new ArrayList<>(prop.crustal);
+        source.addAll(prop.subduction);
+        return s -> s.getSectionName().contains("row:") ?
+                0 :
+                stiffnessCalculator.calc(source, List.of(s));
     }
 
     public static ValueForSection subductionAsSource(

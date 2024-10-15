@@ -11,6 +11,7 @@ import org.opensha.sha.earthquake.faultSysSolution.reports.ReportMetadata;
 import org.opensha.sha.earthquake.faultSysSolution.reports.ReportPageGen;
 import org.opensha.sha.earthquake.faultSysSolution.reports.RupSetMetadata;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.ClusterRupture;
+import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.report.MultiRupturePlot;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.report.RupturePlotPageGenerator;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.RupCartoonGenerator;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.SectionDistanceAzimuthCalculator;
@@ -37,16 +38,10 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
     SectionDistanceAzimuthCalculator disAzCalc;
     FaultSystemRupSet rupSet;
 
+    public Map<Integer, String> specificRuptures = null;
+
     public void setStiffnessCalc(SubSectStiffnessCalculator stiffnessCalc) {
-        this.stiffnessCalcs = new AggregatedStiffnessCalculator[] {
-                new AggregatedStiffnessCalculator(
-                        SubSectStiffnessCalculator.StiffnessType.CFF,
-                        stiffnessCalc,
-                        true,
-                        AggregatedStiffnessCalculator.AggregationMethod.FLATTEN,
-                        AggregatedStiffnessCalculator.AggregationMethod.SUM,
-                        AggregatedStiffnessCalculator.AggregationMethod.SUM,
-                        AggregatedStiffnessCalculator.AggregationMethod.SUM),
+        this.stiffnessCalcs = new AggregatedStiffnessCalculator[]{
                 new AggregatedStiffnessCalculator(
                         SubSectStiffnessCalculator.StiffnessType.CFF,
                         stiffnessCalc,
@@ -54,7 +49,15 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
                         AggregatedStiffnessCalculator.AggregationMethod.FLATTEN,
                         AggregatedStiffnessCalculator.AggregationMethod.NUM_POSITIVE,
                         AggregatedStiffnessCalculator.AggregationMethod.SUM,
-                        AggregatedStiffnessCalculator.AggregationMethod.NORM_BY_COUNT)
+                        AggregatedStiffnessCalculator.AggregationMethod.NORM_BY_COUNT),
+                new AggregatedStiffnessCalculator(
+                        SubSectStiffnessCalculator.StiffnessType.CFF,
+                        stiffnessCalc,
+                        true,
+                        AggregatedStiffnessCalculator.AggregationMethod.FLATTEN,
+                        AggregatedStiffnessCalculator.AggregationMethod.SUM,
+                        AggregatedStiffnessCalculator.AggregationMethod.SUM,
+                        AggregatedStiffnessCalculator.AggregationMethod.SUM)
         };
 
     }
@@ -145,6 +148,12 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
         lines.add("### Number of sections");
         lines.add("");
         lines.addAll(plotForValue(properties, p -> p.crustal.size() + p.subduction.size(), resourcesDir, relPathToResources, "subToCru0"));
+
+        if (specificRuptures != null) {
+            lines.add("### Selected Ruptures");
+            lines.add("");
+            lines.addAll(plotSpecial(properties, resourcesDir, relPathToResources, "everything"));
+        }
 
         List<RuptureProperties> subductionOnly = properties.stream().
                 filter(p -> p.subToCrustalStiffness[0] >= STIFFNESS_THRESHOLD && p.crustalToSubStiffness[0] < STIFFNESS_THRESHOLD).
@@ -240,6 +249,38 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
     }
 
 
+    protected List<String> plotSpecial(List<RuptureProperties> properties,
+                                       File resourcesDir,
+                                       String relPathToResources,
+                                       String thumbnail) throws IOException {
+
+        properties = properties.stream().filter(p -> specificRuptures.containsKey(p.index)).collect(Collectors.toList());
+
+        MarkdownUtils.TableBuilder table = MarkdownUtils.tableBuilder();
+
+        table.initNewLine();
+        for (RuptureProperties property : properties) {
+            table.addColumn("rupture " + property.index + " " + specificRuptures.get(property.index));
+        }
+        table.finalizeLine();
+
+        table.initNewLine();
+        RupturePlotPageGenerator pageGenerator = new RupturePlotPageGenerator(stiffnessCalcs, rupSet);
+
+        for (RuptureProperties prop : properties) {
+            String relOutputDir = PREFIX + prop.index;
+            File outputDir = new File(resourcesDir, relOutputDir);
+            outputDir.mkdirs();
+            pageGenerator.makeRupturePage(prop, outputDir);
+            File relPageDir = new File(relPathToResources, relOutputDir);
+            table.addColumn("[<img src=\"" + new File(relPageDir, prop.plots.get(thumbnail)) + "\" />](" + new File(relPageDir, "index.html") + ")");
+        }
+        table.finalizeLine();
+
+        return table.wrap(5, 0).build();
+    }
+
+
     @Override
     public Collection<Class<? extends OpenSHA_Module>> getRequiredModules() {
         return List.of();
@@ -254,8 +295,15 @@ public class MultiRuptureStiffnessPlot extends AbstractRupSetPlot {
         File file = new File("C:\\tmp\\rupSetBruceRundir5883.zip");
         FaultSystemRupSet rupSet = FaultSystemRupSet.load(file);
         ReportMetadata meta = new ReportMetadata(new RupSetMetadata(file.getName(), rupSet));
-        List<AbstractRupSetPlot> plots = List.of(new MultiRuptureStiffnessPlot());
-        ReportPageGen report = new ReportPageGen(meta, new File("/tmp/reports/bruceRundior5883"), plots);
+        MultiRuptureStiffnessPlot stiffnessPlot = new MultiRuptureStiffnessPlot();
+        List<AbstractRupSetPlot> plots = List.of(stiffnessPlot);
+        Map<Integer, String> specificRups = new HashMap<>();
+        specificRups.put(53, "fraction area of passing crustal sections 0.7777777777778115");
+        specificRups.put(101, "fraction area of passing crustal sections 0.0");
+        specificRups.put(199, "fraction area of passing crustal sections 0.0");
+        specificRups.put(264, "fraction area of passing crustal sections 0.4955372339958984");
+        stiffnessPlot.specificRuptures = specificRups;
+        ReportPageGen report = new ReportPageGen(meta, new File("/tmp/reports/bruceRundir5883"), plots);
         report.generatePage();
     }
 }

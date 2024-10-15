@@ -41,6 +41,7 @@ public class RupturePlotPageGenerator {
 
     /**
      * Writes the specified plots to file, making sure that all use the same CPT to make them easily comparable.
+     *
      * @param outputDir
      * @param plots
      * @throws IOException
@@ -61,7 +62,7 @@ public class RupturePlotPageGenerator {
             min = -dist;
             max = dist;
         }
-        if(min >=0) {
+        if (min >= 0) {
             min = -max;
         }
         CPT cpt = GMT_CPT_Files.DIVERGENT_RYB.instance().reverse().rescale(min, max);
@@ -102,13 +103,16 @@ public class RupturePlotPageGenerator {
             MultiRupturePlot cruToSubPlot0 = new MultiRupturePlot("CruAsSource0", prop.rupture, rupTitle + "(crustal as source)", MultiRupturePlot.crustalAsSource(stiffnessCalcs[0], prop), stiffnessCalcs[0].toString());
             MultiRupturePlot subToCruPlot1 = new MultiRupturePlot("SubAsSource1", prop.rupture, rupTitle + "(subduction as source)", MultiRupturePlot.subductionAsSource(stiffnessCalcs[1], prop), stiffnessCalcs[1].toString());
             MultiRupturePlot cruToSubPlot1 = new MultiRupturePlot("CruAsSource1", prop.rupture, rupTitle + "(crustal as source)", MultiRupturePlot.crustalAsSource(stiffnessCalcs[1], prop), stiffnessCalcs[1].toString());
+            MultiRupturePlot everythingPlot = new MultiRupturePlot("EverythingAsSource", prop.rupture, rupTitle + "(everything as source)", MultiRupturePlot.everythingAsSource(stiffnessCalcs[1], prop), stiffnessCalcs[1].toString());
             prop.plots.put("subToCru0", subToCruPlot0.getFileName());
             prop.plots.put("cruToSub0", cruToSubPlot0.getFileName());
             prop.plots.put("subToCru1", subToCruPlot1.getFileName());
             prop.plots.put("cruToSub1", cruToSubPlot1.getFileName());
+            prop.plots.put("everything", everythingPlot.getFileName());
 
-            plotWithSameCPT(outputDir, subToCruPlot0, cruToSubPlot0);
-            plotWithFixedCPT(outputDir, 0, 1, subToCruPlot1, cruToSubPlot1);
+            plotWithFixedCPT(outputDir, 0, 1, subToCruPlot0, cruToSubPlot0);
+            plotWithSameCPT(outputDir, subToCruPlot1, cruToSubPlot1);
+            plotWithSameCPT(outputDir, everythingPlot);
 
             // create markdown
 
@@ -134,6 +138,9 @@ public class RupturePlotPageGenerator {
                     subToCruPlot1.getStats() + "Total: " + o3DF.format(prop.subToCrustalStiffness[1]),
                     cruToSubPlot1.getStats() + "Total: " + o3DF.format(prop.crustalToSubStiffness[1]));
             lines.addAll(table.wrap(2, 1).build());
+            lines.add("");
+
+            lines.add("![everythingPlot](" + everythingPlot.getFileName() + ")");
 
             lines.add("");
             lines.add("- Crustal sections: " + prop.crustal.size());
