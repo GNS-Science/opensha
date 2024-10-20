@@ -60,7 +60,6 @@ public class MultiRuptureCoulombFilter implements MultiRuptureCompatibilityFilte
 		for (FaultSection from : fromSects) {
 			boolean sourcePass = aggCalc.calc(List.of(from), toSects) >= threshold;
 			if (sourcePass) {
-				from.getArea(false);
 				fromSourcePass++;
 			}
 			boolean targetPass = aggCalc.calc(toSects, List.of(from)) >= threshold;
