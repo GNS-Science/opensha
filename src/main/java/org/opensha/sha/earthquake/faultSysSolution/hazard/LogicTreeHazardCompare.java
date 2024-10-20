@@ -85,10 +85,12 @@ import org.opensha.commons.mapping.gmt.elements.GMT_CPT_Files;
 import org.opensha.commons.util.DataUtils;
 import org.opensha.commons.util.DataUtils.MinMaxAveTracker;
 import org.opensha.commons.util.ExceptionUtils;
+import org.opensha.commons.util.ExecutorUtils;
 import org.opensha.commons.util.Interpolate;
 import org.opensha.commons.util.MarkdownUtils;
 import org.opensha.commons.util.MarkdownUtils.TableBuilder;
 import org.opensha.commons.util.cpt.CPT;
+import org.opensha.commons.util.io.archive.ArchiveInput;
 import org.opensha.sha.earthquake.faultSysSolution.FaultSystemSolution;
 import org.opensha.sha.earthquake.faultSysSolution.hazard.mpj.MPJ_LogicTreeHazardCalc;
 import org.opensha.sha.earthquake.faultSysSolution.modules.AbstractLogicTreeModule;
@@ -403,7 +405,10 @@ public class LogicTreeHazardCompare {
 			if (cmd.hasOption("logic-tree")) {
 				File treeFile = new File(cmd.getOptionValue("logic-tree"));
 				System.out.println("Reading custom logic tree from: "+treeFile.getAbsolutePath());
-				tree = LogicTree.read(treeFile);
+				if (treeFile.getName().endsWith("zip"))
+					tree = loadTreeFromResults(treeFile);
+				else
+					tree = LogicTree.read(treeFile);
 				ignorePrecomputed = true;
 			} else {
 				// read it from the hazard file if available
@@ -457,13 +462,13 @@ public class LogicTreeHazardCompare {
 		if (resultsFile == null) {
 			solTree = null;
 		} else {
-			ZipFile resultsZip = new ZipFile(resultsFile);
-			if (FaultSystemSolution.isSolution(resultsZip)) {
+			ArchiveInput resultsInput = ArchiveInput.getDefaultInput(resultsFile);
+			if (FaultSystemSolution.isSolution(resultsInput)) {
 				// single solution
-				FaultSystemSolution sol = FaultSystemSolution.load(resultsZip);
+				FaultSystemSolution sol = FaultSystemSolution.load(resultsInput);
 				solTree = new SolutionLogicTree.InMemory(sol, null);
 			} else {
-				solTree = SolutionLogicTree.load(resultsZip);
+				solTree = SolutionLogicTree.load(resultsInput);
 			}
 		}
 		
@@ -492,6 +497,16 @@ public class LogicTreeHazardCompare {
 			if (ignorePrecomputed)
 				System.out.println("Ignoring any pre-computed mean maps");
 			mapper.ignorePrecomputed = ignorePrecomputed;
+			
+			if (cmd.hasOption("cpt-range")) {
+				String rangeStr = cmd.getOptionValue("cpt-range");
+				Preconditions.checkArgument(rangeStr.contains(","));
+				String[] split = rangeStr.split(",");
+				double lower = Double.parseDouble(split[0]);
+				double upper = Double.parseDouble(split[1]);
+				System.out.println("CPT range: ["+(float)lower+", "+(float)upper+"]");
+				mapper.setCPTRange(lower, upper);
+			}
 			
 			if (compHazardFile != null) {
 				SolutionLogicTree compSolTree;
@@ -548,6 +563,7 @@ public class LogicTreeHazardCompare {
 		ops.addOption("ipm", "ignore-precomputed-maps", false,
 				"Flag to ignore precomputed mean maps");
 		ops.addOption("pdf", "write-pdfs", false, "Flag to write PDFs of top level maps");
+		ops.addOption(null, "cpt-range", true, "Custom CPT range for hazard maps, in log10 units. Specify as min,max");
 		
 		return ops;
 	}
@@ -556,13 +572,17 @@ public class LogicTreeHazardCompare {
 		ZipFile zip = new ZipFile(resultsFile);
 		
 		ZipEntry entry = zip.getEntry(AbstractLogicTreeModule.LOGIC_TREE_FILE_NAME);
-		if (entry == null)
+		if (entry == null) {
+			zip.close();
 			return null;
+		}
 		
 		BufferedInputStream logicTreeIS = new BufferedInputStream(zip.getInputStream(entry));
 		Gson gson = new GsonBuilder().registerTypeAdapter(LogicTree.class, new LogicTree.Adapter<>()).create();
 		InputStreamReader reader = new InputStreamReader(logicTreeIS);
-		return gson.fromJson(reader, LogicTree.class);
+		LogicTree<?> tree = gson.fromJson(reader, LogicTree.class);
+		zip.close();
+		return tree;
 	}
 	
 	private ReturnPeriods[] rps;
@@ -683,13 +703,18 @@ public class LogicTreeHazardCompare {
 		}
 		
 		int threads = Integer.max(2, Integer.min(16, FaultSysTools.defaultNumThreads()));
-//		exec = Executors.newFixedThreadPool(threads);
 		// this will block to make sure the queue is never too large
-		exec = new ThreadPoolExecutor(threads, threads,
-                0L, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<Runnable>(Integer.max(threads*4, threads+10)), new ThreadPoolExecutor.CallerRunsPolicy());
+		exec = ExecutorUtils.newBlockingThreadPool(threads, Integer.max(threads*4, threads+10));
 		
 		System.out.println(branches.size()+" branches, total weight: "+totWeight);
+	}
+	
+	public void setCPTRange(double lower, double upper) {
+		try {
+			logCPT = GMT_CPT_Files.RAINBOW_UNIFORM.instance().rescale(lower, upper);
+		} catch (IOException e) {
+			throw ExceptionUtils.asRuntimeException(e);
+		}
 	}
 	
 	public SolHazardMapCalc getMapper() {
@@ -710,14 +735,14 @@ public class LogicTreeHazardCompare {
 		LogicTreeBranch<?> branch0 = branches.get(0);
 		if (branch0 != null) {
 			FaultSystemSolution sol = null;
-			if (mapper == null)
+			if (mapper == null && solLogicTree != null)
 				sol = solLogicTree.forBranch(branch0, false);
 			
 			if (gridReg == null) {
 				if (spacing <= 0d) {
 					// detect spacing
 
-					String dirName = branch0.buildFileName();
+					String dirName = branch0.getBranchZipPath();
 					String name = dirName+"/"+MPJ_LogicTreeHazardCalc.mapPrefix(periods[0], rps[0])+".txt";
 					ZipEntry entry = zip.getEntry(name);
 					Preconditions.checkNotNull(entry, "Entry is null for %s", name);
@@ -842,7 +867,7 @@ public class LogicTreeHazardCompare {
 			} else {
 //				System.out.println("Processing maps for "+branch);
 				
-				String dirName = branch.buildFileName();
+				String dirName = branch.getBranchZipPath();
 				
 				if (readFuture != null)
 					// finish reading prior one

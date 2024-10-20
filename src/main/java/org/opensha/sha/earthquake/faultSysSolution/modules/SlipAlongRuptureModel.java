@@ -8,6 +8,8 @@ import java.util.zip.ZipOutputStream;
 
 import org.opensha.commons.calc.FaultMomentCalc;
 import org.opensha.commons.data.function.EvenlyDiscretizedFunc;
+import org.opensha.commons.util.io.archive.ArchiveInput;
+import org.opensha.commons.util.io.archive.ArchiveOutput;
 import org.opensha.commons.util.modules.ArchivableModule;
 import org.opensha.commons.util.modules.AverageableModule.ConstantAverageable;
 import org.opensha.commons.util.modules.OpenSHA_Module;
@@ -20,7 +22,7 @@ import com.google.common.base.Preconditions;
 import scratch.UCERF3.enumTreeBranches.SlipAlongRuptureModels;
 
 public abstract class SlipAlongRuptureModel implements OpenSHA_Module, ConstantAverageable<SlipAlongRuptureModel>,
-SplittableRuptureSubSetModule<SlipAlongRuptureModel> {
+SplittableRuptureModule<SlipAlongRuptureModel> {
 
 	public static SlipAlongRuptureModel forModel(SlipAlongRuptureModelBranchNode slipAlong) {
 		return slipAlong.getModel();
@@ -114,12 +116,12 @@ SplittableRuptureSubSetModule<SlipAlongRuptureModel> {
 	private static abstract class NamedSlipAlongRuptureModel extends SlipAlongRuptureModel implements ArchivableModule {
 		
 		@Override
-		public void writeToArchive(ZipOutputStream zout, String entryPrefix) throws IOException {
+		public void writeToArchive(ArchiveOutput output, String entryPrefix) throws IOException {
 			// do nothing (no serialization required, just must be listed)
 		}
 
 		@Override
-		public void initFromArchive(ZipFile zip, String entryPrefix) throws IOException {
+		public void initFromArchive(ArchiveInput input, String entryPrefix) throws IOException {
 			// do nothing (no deserialization required, just must be listed)
 		}
 		
@@ -347,6 +349,12 @@ SplittableRuptureSubSetModule<SlipAlongRuptureModel> {
 
 	@Override
 	public SlipAlongRuptureModel getForRuptureSubSet(FaultSystemRupSet rupSubSet, RuptureSubSetMappings mappings) {
+		return this;
+	}
+
+	@Override
+	public SlipAlongRuptureModel getForSplitRuptureSet(FaultSystemRupSet splitRupSet,
+			RuptureSetSplitMappings mappings) {
 		return this;
 	}
 

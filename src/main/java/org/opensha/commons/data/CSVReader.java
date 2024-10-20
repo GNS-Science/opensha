@@ -7,9 +7,10 @@ import java.util.*;
  * CSV reader that allows for CSV files to be read directly instead of
  * having to load a potentially large intermediate structure into memory.
  */
-public class CSVReader implements Closeable {
+public class CSVReader implements Closeable, Iterable<CSVReader.Row> {
 
     protected BufferedReader reader;
+    protected int expectedSize = -1;
 
     public CSVReader(InputStream in) {
         reader = new BufferedReader(new InputStreamReader(in));
@@ -31,7 +32,9 @@ public class CSVReader implements Closeable {
             return null;
         }
 
-        return new Row(line);
+        Row row = new Row(line, expectedSize);
+        expectedSize = row.columns();
+        return row;
     }
 
     @Override
@@ -39,13 +42,49 @@ public class CSVReader implements Closeable {
         reader.close();
     }
 
+	@Override
+	public Iterator<Row> iterator() {
+		return new Iterator<CSVReader.Row>() {
+			
+			private Row next = null;
+			private boolean done = false;
+			
+			@Override
+			public Row next() {
+				if (next != null || hasNext()) {
+					Row result = next;
+					next = null;
+					return result;
+				}
+				throw new NoSuchElementException();
+			}
+
+			@Override
+			public boolean hasNext() {
+				if (done) {
+					return false;
+				}
+				if (next != null) {
+					return true;
+				}
+				next = read();
+				if (next == null) {
+					done = true;
+					return false;
+				}
+				return true;
+			}
+			
+		};
+	}
+
     public static class Row {
 
         // the data of the current row
         protected final List<String> line;
 
-        Row(String row) {
-            this.line = CSVFile.loadLine(row);
+        Row(String row, int expectedSize) {
+            this.line = CSVFile.loadLine(row, -1, expectedSize);
         }
 
         /**
@@ -79,12 +118,31 @@ public class CSVReader implements Closeable {
         }
 
         /**
+         * Get a float value at the specified column.
+         *
+         * @param column the column index, 0-based
+         * @return the float value of the column
+         */
+        public float getFloat(int column) {
+            return Float.parseFloat(get(column).trim());
+        }
+
+        /**
          * Get all values as strings.
          *
          * @return a list of all column values
          */
         public List<String> getLine() {
             return line;
+        }
+        
+        /**
+         * Get the number of columns in this row
+         * 
+         * @return number of columns
+         */
+        public int columns() {
+        	return line.size();
         }
     }
 }

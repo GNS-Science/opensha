@@ -18,6 +18,8 @@ import org.opensha.commons.data.function.DiscretizedFunc;
 import org.opensha.commons.eq.MagUtils;
 import org.opensha.commons.geo.Region;
 import org.opensha.commons.util.ExceptionUtils;
+import org.opensha.commons.util.io.archive.ArchiveInput;
+import org.opensha.commons.util.io.archive.ArchiveOutput;
 import org.opensha.commons.util.modules.ArchivableModule;
 import org.opensha.commons.util.modules.ModuleArchive;
 import org.opensha.commons.util.modules.ModuleContainer;
@@ -26,14 +28,18 @@ import org.opensha.commons.util.modules.SubModule;
 import org.opensha.commons.util.modules.helpers.CSV_BackedModule;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.constraints.impl.PaleoProbabilityModel;
 import org.opensha.sha.earthquake.faultSysSolution.modules.BuildInfoModule;
+import org.opensha.sha.earthquake.faultSysSolution.modules.GridSourceList;
 import org.opensha.sha.earthquake.faultSysSolution.modules.GridSourceProvider;
 import org.opensha.sha.earthquake.faultSysSolution.modules.InfoModule;
+import org.opensha.sha.earthquake.faultSysSolution.modules.MFDGridSourceProvider;
 import org.opensha.sha.earthquake.faultSysSolution.modules.RupMFDsModule;
+import org.opensha.sha.earthquake.faultSysSolution.modules.RupSetTectonicRegimes;
 import org.opensha.sha.earthquake.faultSysSolution.modules.SubSeismoOnFaultMFDs;
 import org.opensha.sha.gui.infoTools.CalcProgressBar;
 import org.opensha.sha.magdist.ArbIncrementalMagFreqDist;
 import org.opensha.sha.magdist.IncrementalMagFreqDist;
 import org.opensha.sha.magdist.SummedMagFreqDist;
+import org.opensha.sha.util.TectonicRegionType;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
@@ -115,8 +121,22 @@ SubModule<ModuleArchive<OpenSHA_Module>> {
 		getArchive().write(file);
 	}
 	
+	/**
+	 * Writes this solution to the give {@link ArchiveOutput} This is an alias to <code>getArchive().write(ModuleArchiveOutput)</code>.
+	 * See {@link #getArchive()}.
+	 * @param output
+	 * @throws IOException
+	 */
+	public void write(ArchiveOutput output) throws IOException {
+		getArchive().write(output);
+	}
+	
 	public static boolean isSolution(ZipFile zip) {
 		return zip.getEntry("solution/"+RATES_FILE_NAME) != null || zip.getEntry("rates.bin") != null;
+	}
+	
+	public static boolean isSolution(ArchiveInput input) throws IOException {
+		return input.hasEntry("solution/"+RATES_FILE_NAME) || input.hasEntry("rates.bin");
 	}
 	
 	/**
@@ -127,7 +147,7 @@ SubModule<ModuleArchive<OpenSHA_Module>> {
 	 * @throws IOException
 	 */
 	public static FaultSystemSolution load(File file) throws IOException {
-		return load(new ZipFile(file));
+		return load(ArchiveInput.getDefaultInput(file));
 	}
 	
 	/**
@@ -140,7 +160,7 @@ SubModule<ModuleArchive<OpenSHA_Module>> {
 	 * @throws IOException
 	 */
 	public static FaultSystemSolution load(File file, FaultSystemRupSet rupSet) throws IOException {
-		return load(new ZipFile(file), rupSet);
+		return load(ArchiveInput.getDefaultInput(file), rupSet);
 	}
 
 	/**
@@ -164,30 +184,70 @@ SubModule<ModuleArchive<OpenSHA_Module>> {
 	 * @throws IOException
 	 */
 	public static FaultSystemSolution load(ZipFile zip, FaultSystemRupSet rupSet) throws IOException {
+		// see if it's an old rupture set
+		if (rupSet == null && zip.getEntry("rup_sections.bin") != null && zip.getEntry("rates.bin") != null) {
+			System.err.println("WARNING: this is a legacy fault sytem solution, that file format is deprecated. "
+					+ "Will attempt to load it using the legacy file loader. "
+					+ "See https://opensha.org/File-Formats for more information.");
+			try {
+				return U3FaultSystemIO.loadSolAsApplicable(zip, null);
+			} catch (DocumentException e) {
+				throw ExceptionUtils.asRuntimeException(e);
+			}
+		}
+		return load(new ArchiveInput.ZipFileInput(zip), rupSet);
+	}
+	
+
+
+	/**
+	 * Loads a FaultSystemSolution from the given input
+	 * 
+	 * @param zip
+	 * @return
+	 * @throws IOException
+	 */
+	public static FaultSystemSolution load(ArchiveInput input) throws IOException {
+		return load(input, null);
+	}
+
+	/**
+	 * Loads a FaultSystemSolution from the given input, using the existing rupture set instead of the attached rupture set.
+	 * This can be useful for quickly loading many solutions based on the same rupture set.
+	 * 
+	 * @param zip
+	 * @param rupSet
+	 * @return
+	 * @throws IOException
+	 */
+	public static FaultSystemSolution load(ArchiveInput input, FaultSystemRupSet rupSet) throws IOException {
+		if (rupSet == null && input.hasEntry("rup_sections.bin") && input.hasEntry("rates.bin")) {
+			System.err.println("WARNING: this is a legacy fault sytem solution, that file format is deprecated. "
+					+ "Will attempt to load it using the legacy file loader. "
+					+ "See https://opensha.org/File-Formats for more information.");
+			Preconditions.checkState(input instanceof ArchiveInput.FileBacked,
+					"Can only do a deprecated load from zip files (this isn't file-backed)");
+			try {
+				return U3FaultSystemIO.loadSolAsApplicable(((ArchiveInput.FileBacked)input).getInputFile());
+			} catch (DocumentException e) {
+				throw ExceptionUtils.asRuntimeException(e);
+			}
+		}
+		
 		ModuleArchive<OpenSHA_Module> archive;
 		if (rupSet == null) {
-			archive = new ModuleArchive<>(zip, FaultSystemSolution.class);
+			archive = new ModuleArchive<>(input, FaultSystemSolution.class);
 		} else {
-			archive = new ModuleArchive<>(zip);
+			archive = new ModuleArchive<>(input);
 			archive.addModule(rupSet);
 		}
 		
 		FaultSystemSolution sol = archive.getModule(FaultSystemSolution.class);
 		if (sol == null) {
-			// see if it's an old rupture set
-			if (zip.getEntry("rup_sections.bin") != null && zip.getEntry("rates.bin") != null) {
-				System.err.println("WARNING: this is a legacy fault sytem solution, that file format is deprecated. "
-						+ "Will attempt to load it using the legacy file loader. "
-						+ "See https://opensha.org/File-Formats for more information.");
-				try {
-					return U3FaultSystemIO.loadSolAsApplicable(zip, null);
-				} catch (DocumentException e) {
-					throw ExceptionUtils.asRuntimeException(e);
-				}
-			}
-			if (zip.getEntry("modules.json") == null
-					&& zip.getEntry("ruptures/"+FaultSystemRupSet.RUP_SECTS_FILE_NAME) != null
-					&& zip.getEntry("solution/rates.csv") != null) {
+			if (!input.hasEntry("modules.json") // doesn't have modules
+					// but does have rup sections and solution rates
+					&& input.hasEntry("ruptures/"+FaultSystemRupSet.RUP_SECTS_FILE_NAME)
+					&& input.hasEntry("solution/rates.csv")) {
 				// missing modules.json, try to load it as an unlisted module
 				System.err.println("WARNING: solution archive is missing modules.json, trying to load it anyway");
 				archive.loadUnlistedModule(FaultSystemRupSet.class, "ruptures/");
@@ -230,9 +290,9 @@ SubModule<ModuleArchive<OpenSHA_Module>> {
 	}
 
 	@Override
-	public final void writeToArchive(ZipOutputStream zout, String entryPrefix) throws IOException {
+	public final void writeToArchive(ArchiveOutput output, String entryPrefix) throws IOException {
 		// CSV Files
-		CSV_BackedModule.writeToArchive(buildRatesCSV(this), zout, entryPrefix, RATES_FILE_NAME);
+		CSV_BackedModule.writeToArchive(buildRatesCSV(this), output, entryPrefix, RATES_FILE_NAME);
 	}
 	
 	public static double[] loadRatesCSV(CSVFile<String> ratesCSV) {
@@ -245,30 +305,49 @@ SubModule<ModuleArchive<OpenSHA_Module>> {
 	}
 
 	@Override
-	public final void initFromArchive(ZipFile zip, String entryPrefix) throws IOException {
+	public final void initFromArchive(ArchiveInput input, String entryPrefix) throws IOException {
 		Preconditions.checkNotNull(archive, "archive must be set before initialization");
 		if (rupSet == null)
 			rupSet = archive.getModule(FaultSystemRupSet.class);
 		Preconditions.checkNotNull(rupSet, "Rupture set not found in archive");
 		
 		System.out.println("\tLoading rates CSV...");
-		CSVFile<String> ratesCSV = CSV_BackedModule.loadFromArchive(zip, entryPrefix, RATES_FILE_NAME);
+		CSVFile<String> ratesCSV = CSV_BackedModule.loadFromArchive(input, entryPrefix, RATES_FILE_NAME);
 		rates = loadRatesCSV(ratesCSV);
 		Preconditions.checkState(rates.length == rupSet.getNumRuptures(), "Unexpected number of rows in rates CSV");
-		
-		if (archive != null && zip.getEntry(entryPrefix+"modules.json") == null) {
-			// we're missing an index, see if any common modules are present that we can manually load
+
+		if (archive != null) {
+			// see if any common modules are are present but unlised (either because modules.json is missing, or someone
+			// added them manually)
 			
-			if (zip.getEntry(entryPrefix+GridSourceProvider.ARCHIVE_GRID_REGION_FILE_NAME) != null) {
+			if (!hasAvailableModule(GridSourceProvider.class)) {
+				if (input.hasEntry(entryPrefix+MFDGridSourceProvider.ARCHIVE_MECH_WEIGHT_FILE_NAME)) {
+					try {
+						System.out.println("Trying to load unlisted MFDGridSourceProvider module");
+						archive.loadUnlistedModule(MFDGridSourceProvider.Default.class, entryPrefix, this);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				} else if (input.hasEntry(entryPrefix+GridSourceList.ARCHIVE_GRID_SOURCES_FILE_NAME)) {
+					try {
+						System.out.println("Trying to load unlisted GridSourceList module");
+						archive.loadUnlistedModule(GridSourceList.Precomputed.class, entryPrefix, this);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}
+			}
+			
+			if (input.hasEntry(entryPrefix+RupMFDsModule.FILE_NAME) && !hasAvailableModule(RupMFDsModule.class)) {
 				try {
-					System.out.println("Trying to load unlisted GridSourceProvider module");
-					archive.loadUnlistedModule(GridSourceProvider.Default.class, entryPrefix, this);
+					System.out.println("Trying to load unlisted RupMFDsModule module");
+					archive.loadUnlistedModule(RupMFDsModule.class, entryPrefix, this);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
 			
-			if (zip.getEntry(entryPrefix+SubSeismoOnFaultMFDs.DATA_FILE_NAME) != null) {
+			if (input.hasEntry(entryPrefix+SubSeismoOnFaultMFDs.DATA_FILE_NAME) && !hasAvailableModule(SubSeismoOnFaultMFDs.class)) {
 				try {
 					System.out.println("Trying to load unlisted SubSeismoOnFaultMFDs module");
 					archive.loadUnlistedModule(SubSeismoOnFaultMFDs.class, entryPrefix, this);
@@ -810,8 +889,27 @@ SubModule<ModuleArchive<OpenSHA_Module>> {
 	 * @return IncrementalMagFreqDist
 	 */
 	public IncrementalMagFreqDist calcNucleationMFD_forRegion(Region region, double minMag, double maxMag, double delta, boolean traceOnly) {
+		return calcNucleationMFD_forRegion(region, minMag, maxMag, delta, traceOnly, null);
+	}
+	
+
+
+	/**
+	 * This gives the total nucleation Mag Freq Dist inside the supplied region.  
+	 * If <code>traceOnly == true</code>, only the rupture trace is examined in computing the fraction of the rupture 
+	 * inside the region.  This preserves rates rather than moRates (can't have both).
+	 * @param region - a Region object
+	 * @param minMag - lowest mag in MFD
+	 * @param maxMag - highest mag in MFD
+	 * @param delta - width of each mfd bin
+	 * @param traceOnly - if true only fault traces will be used for fraction inside region calculations, otherwise the
+	 * entire rupture surfaces will be used (slower)
+	 * @param trt - tectonic region type, will be compared against a {@link RupSetTectonicRegimes} module if non-null
+	 * @return IncrementalMagFreqDist
+	 */
+	public IncrementalMagFreqDist calcNucleationMFD_forRegion(Region region, double minMag, double maxMag, double delta, boolean traceOnly, TectonicRegionType trt) {
 		int numMag = (int)((maxMag - minMag) / delta+0.5) + 1;
-		return calcNucleationMFD_forRegion(region, minMag, maxMag, numMag, traceOnly);
+		return calcNucleationMFD_forRegion(region, minMag, maxMag, numMag, traceOnly, trt);
 	}
 
 	/**
@@ -826,16 +924,42 @@ SubModule<ModuleArchive<OpenSHA_Module>> {
 	 * entire rupture surfaces will be used (slower)
 	 * @return IncrementalMagFreqDist
 	 */
-	public IncrementalMagFreqDist calcNucleationMFD_forRegion(Region region, double minMag, double maxMag, int numMag, boolean traceOnly) {
+	public IncrementalMagFreqDist calcNucleationMFD_forRegion(Region region, double minMag, double maxMag, int numMag,
+			boolean traceOnly) {
+		return calcNucleationMFD_forRegion(region, minMag, maxMag, numMag, traceOnly, null);
+	}
+	
+
+
+	/**
+	 * This gives the total nucleation Mag Freq Dist inside the supplied region.  
+	 * If <code>traceOnly == true</code>, only the rupture trace is examined in computing the fraction of the rupture
+	 * inside the region.  This preserves rates rather than moRates (can't have both).
+	 * @param region - a Region object
+	 * @param minMag - lowest mag in MFD
+	 * @param maxMag - highest mag in MFD
+	 * @param numMag - number of mags in MFD
+	 * @param traceOnly - if true only fault traces will be used for fraction inside region calculations, otherwise the
+	 * entire rupture surfaces will be used (slower)
+	 * @param trt - tectonic region type, will be compared against a {@link RupSetTectonicRegimes} module if non-null
+	 * @return IncrementalMagFreqDist
+	 */
+	public IncrementalMagFreqDist calcNucleationMFD_forRegion(Region region, double minMag, double maxMag, int numMag,
+			boolean traceOnly, TectonicRegionType trt) {
 		ArbIncrementalMagFreqDist mfd = new ArbIncrementalMagFreqDist(minMag, maxMag, numMag);
 		double[] fractRupsInside = null;
 		if (region != null)
 			fractRupsInside = rupSet.getFractRupsInsideRegion(region, traceOnly);
+		RupSetTectonicRegimes trts = null;
+		if (trt != null)
+			trts = getRupSet().requireModule(RupSetTectonicRegimes.class);
 		RupMFDsModule mfds = getModule(RupMFDsModule.class);
 		for(int r=0;r<rupSet.getNumRuptures();r++) {
 			double fractInside = 1;
 			if (region != null)
 				fractInside = fractRupsInside[r];
+			if (trt != null && trt != trts.get(r))
+				continue;
 //			if (fractInside < 1)
 //				System.out.println("inside: "+fractInside+"\trate: "+rateInside+"\tID: "+r);
 			if (fractInside > 0d) {

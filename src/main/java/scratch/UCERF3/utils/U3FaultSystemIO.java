@@ -37,6 +37,7 @@ import org.opensha.commons.util.XMLUtils;
 import org.opensha.refFaultParamDb.vo.FaultSectionPrefData;
 import org.opensha.sha.earthquake.faultSysSolution.FaultSystemRupSet;
 import org.opensha.sha.earthquake.faultSysSolution.modules.GridSourceProvider;
+import org.opensha.sha.earthquake.faultSysSolution.modules.MFDGridSourceProvider;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.ClusterRupture;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.PlausibilityConfiguration;
 import org.opensha.sha.earthquake.param.ProbabilityModelOptions;
@@ -211,7 +212,7 @@ public class U3FaultSystemIO {
 	 * @throws ZipException 
 	 * @throws DocumentException 
 	 */
-	private static U3FaultSystemRupSet loadRupSetAsApplicable(File file) throws ZipException, IOException, DocumentException {
+	public static U3FaultSystemRupSet loadRupSetAsApplicable(File file) throws ZipException, IOException, DocumentException {
 		return loadRupSetAsApplicable(new ZipFile(file), null);
 	}
 	
@@ -565,7 +566,7 @@ public class U3FaultSystemIO {
 	 * @throws DocumentException 
 	 * @throws IOException 
 	 */
-	private static U3FaultSystemSolution loadSolAsApplicable(File file) throws IOException, DocumentException {
+	public static U3FaultSystemSolution loadSolAsApplicable(File file) throws IOException, DocumentException {
 		return loadSolAsApplicable(file, null);
 	}
 	
@@ -1032,7 +1033,7 @@ public class U3FaultSystemIO {
 			zipFileNames.add(infoFile.getName());
 		}
 		
-		GridSourceProvider gridSources = sol.getGridSourceProvider();
+		MFDGridSourceProvider gridSources = (MFDGridSourceProvider)sol.getGridSourceProvider();
 		if (gridSources != null) {
 			// new binary format
 //			if (D) System.out.println("Saving grid sources to xml");

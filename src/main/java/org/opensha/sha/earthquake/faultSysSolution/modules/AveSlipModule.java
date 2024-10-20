@@ -5,6 +5,8 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import org.opensha.commons.data.CSVFile;
+import org.opensha.commons.util.io.archive.ArchiveInput;
+import org.opensha.commons.util.io.archive.ArchiveOutput;
 import org.opensha.commons.util.modules.ArchivableModule;
 import org.opensha.commons.util.modules.AverageableModule;
 import org.opensha.commons.util.modules.SubModule;
@@ -18,7 +20,7 @@ import com.google.common.base.Preconditions;
 import scratch.UCERF3.enumTreeBranches.ScalingRelationships;
 
 public abstract class AveSlipModule implements SubModule<FaultSystemRupSet>, BranchAverageableModule<AveSlipModule>,
-SplittableRuptureSubSetModule<AveSlipModule> {
+SplittableRuptureModule<AveSlipModule> {
 	
 	FaultSystemRupSet rupSet;
 
@@ -53,12 +55,12 @@ SplittableRuptureSubSetModule<AveSlipModule> {
 		}
 
 		@Override
-		public void writeToArchive(ZipOutputStream zout, String entryPrefix) throws IOException {
-			new Precomputed(this).writeToArchive(zout, entryPrefix);
+		public void writeToArchive(ArchiveOutput output, String entryPrefix) throws IOException {
+			new Precomputed(this).writeToArchive(output, entryPrefix);
 		}
 
 		@Override
-		public void initFromArchive(ZipFile zip, String entryPrefix) throws IOException {
+		public void initFromArchive(ArchiveInput input, String entryPrefix) throws IOException {
 			throw new IllegalStateException("Only pre-computed average slip modules can be loaded");
 		}
 
@@ -156,7 +158,14 @@ SplittableRuptureSubSetModule<AveSlipModule> {
 			return new ModelBased(rupSubSet, scale);
 		}
 
+		@Override
+		public ModelBased getForSplitRuptureSet(FaultSystemRupSet splitRupSet, RuptureSetSplitMappings mappings) {
+			return new ModelBased(splitRupSet, scale);
+		}
+		
 	}
+	
+	public static final String DATA_FILE_NAME = "average_slips.csv";
 
 	public static class Precomputed extends AveSlipModule implements CSV_BackedModule {
 
@@ -185,7 +194,7 @@ SplittableRuptureSubSetModule<AveSlipModule> {
 
 		@Override
 		public String getFileName() {
-			return "average_slips.csv";
+			return DATA_FILE_NAME;
 		}
 
 		@Override
@@ -282,6 +291,16 @@ SplittableRuptureSubSetModule<AveSlipModule> {
 				filteredAveSlips[r] = aveSlips[origID];
 			}
 			return new Precomputed(rupSubSet, filteredAveSlips);
+		}
+
+		@Override
+		public AveSlipModule getForSplitRuptureSet(FaultSystemRupSet splitRupSet, RuptureSetSplitMappings mappings) {
+			double[] splitAveSlips = new double[splitRupSet.getNumRuptures()];
+			for (int r=0; r<splitRupSet.getNumRuptures(); r++) {
+				int origID = mappings.getOrigRupID(r);
+				splitAveSlips[r] = aveSlips[origID] * mappings.getNewRupWeight(r);
+			}
+			return new Precomputed(splitRupSet, splitAveSlips);
 		}
 
 	}
