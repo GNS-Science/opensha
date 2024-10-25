@@ -16,10 +16,9 @@ import scratch.UCERF3.enumTreeBranches.ScalingRelationships;
 
 import java.io.*;
 import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public class RuptureMerger {
@@ -63,6 +62,10 @@ public class RuptureMerger {
         return null;
     }
 
+    ConcurrentCounter selfStiffnessStatsCru = new ConcurrentCounter();
+    ConcurrentCounter selfStiffnessStatsSub = new ConcurrentCounter();
+    ConcurrentCounter selfStiffnessStatsBoth = new ConcurrentCounter();
+
     /**
      * Create new ruptures that combine the nucleation rupture and any of the target ruptures if they
      * are compatible.
@@ -79,6 +82,20 @@ public class RuptureMerger {
         for (ClusterRupture target : targets) {
             MultiRuptureJump jump = makeJump(nucleation, target);
             if (jump != null) {
+                double[] stats = ((MultiRuptureCoulombFilter)compatibilityFilters.get(1)).statsData(jump);
+                if(stats[0]>0) {
+                    selfStiffnessStatsSub.inc();
+                }
+                if(stats[1]>0) {
+                    selfStiffnessStatsCru.inc();
+                }
+                if(stats[0]>0 && stats[1]>0) {
+                    selfStiffnessStatsBoth.inc();
+                }
+//                if(stats[2]>0) {
+//                    selfAll++;
+//                }
+
                 PlausibilityResult compatibility = PlausibilityResult.PASS;
                 for (MultiRuptureCompatibilityFilter filter : compatibilityFilters) {
                     compatibility = compatibility.logicalAnd(filter.apply(jump, VERBOSE));
@@ -168,7 +185,7 @@ public class RuptureMerger {
         String outPrefix = "mergedRupset_"+oDF.format(maxJumpDist)+"km";
         RuptureMerger merger = new RuptureMerger(rupSet, 5);
 
-        StiffnessCalcModule stiffness = new StiffnessCalcModule(rupSet, 2);
+        StiffnessCalcModule stiffness = new StiffnessCalcModule(rupSet, 2, new File("C:\\tmp\\stiffnessCaches"));
 
         if (stiffness.stiffGridSpacing != 1d)
             outPrefix += "_cffPatch" + oDF.format(stiffness.stiffGridSpacing) + "km";
@@ -193,6 +210,8 @@ public class RuptureMerger {
             firstCoulombFilter = netCoulombFilter;
         merger.addFilter(netCoulombFilter);
 
+
+
         // run RuptureMerger for one nucleation rupture for now
 //     	int fromID = 97653;
 //        ClusterRupture testNucleation = cRups.get(fromID);
@@ -207,6 +226,8 @@ public class RuptureMerger {
         // full calculation
      	merger.setVerbose(false); // otherwise too much stdout
         List<ClusterRupture> mergedRuptures = merger.merge(nucleationRuptures, targetRuptures);
+
+        System.out.println("self stiffness > 0:: all->sub: "+merger.selfStiffnessStatsSub.get()+" all->cru: "+merger.selfStiffnessStatsCru.get() + " both: " + merger.selfStiffnessStatsBoth.get() );
 
 //        List<ClusterRupture> shortList = nucleationRuptures.stream()
 //                .filter(rupture -> rupture.clusters[0].subSects.get(0).getFaultTrace().first().lat > -42 &&

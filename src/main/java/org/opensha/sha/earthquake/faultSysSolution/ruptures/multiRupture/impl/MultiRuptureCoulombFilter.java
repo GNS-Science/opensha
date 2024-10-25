@@ -52,47 +52,6 @@ public class MultiRuptureCoulombFilter implements MultiRuptureCompatibilityFilte
 		return fromSects;
 	}
 
-	public int[] collectStats(MultiRuptureJump jump) {
-		List<FaultSection> fromSects = getSects(jump.fromRupture);
-		List<FaultSection> toSects = getSects(jump.toRupture);
-		int fromSourcePass = 0;
-		int fromTargetPass = 0;
-		for (FaultSection from : fromSects) {
-			boolean sourcePass = aggCalc.calc(List.of(from), toSects) >= threshold;
-			if (sourcePass) {
-				fromSourcePass++;
-			}
-			boolean targetPass = aggCalc.calc(toSects, List.of(from)) >= threshold;
-			if (targetPass) {
-				fromTargetPass++;
-			}
-		}
-
-		int toSourcePass = 0;
-		int toTargetPass = 0;
-		for (FaultSection to : toSects) {
-			boolean sourcePass = aggCalc.calc(List.of(to), fromSects) >= threshold;
-			if (sourcePass) {
-				toSourcePass++;
-			}
-			boolean targetPass = aggCalc.calc(fromSects, List.of(to)) >= threshold;
-			if (targetPass) {
-				toTargetPass++;
-			}
-		}
-
-		return new int[]{
-				fromSects.size(),
-				fromSourcePass,
-				fromTargetPass,
-				toSects.size(),
-				toSourcePass,
-				toTargetPass,
-				fromSects.get(0).getSectionName().contains("row:") ? 1 : 0
-		};
-	}
-
-
 	@Override
 	public PlausibilityResult apply(MultiRuptureJump jump, boolean verbose) {
 		ClusterRupture fromRup = jump.fromRupture;
@@ -214,5 +173,18 @@ public class MultiRuptureCoulombFilter implements MultiRuptureCompatibilityFilte
             this.toSect = toSect;
         }
     }
+
+	public double[] statsData(MultiRuptureJump jump) {
+		List<FaultSection> fromSections = jump.fromRupture.buildOrderedSectionList();
+		List<FaultSection> toSections = jump.toRupture.buildOrderedSectionList();
+		List<FaultSection> allSections = new ArrayList<>(fromSections);
+		allSections.addAll(toSections);
+
+		double from = aggCalc.calc(allSections, fromSections);
+		double to = aggCalc.calc(allSections, toSections);
+		//double self = aggCalc.calc(allSections, allSections);
+
+		return new double[]{from, to};
+	}
 
 }
