@@ -6,6 +6,7 @@ import org.opensha.sha.earthquake.faultSysSolution.ruptures.ClusterRupture;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.impl.MultiRuptureCoulombFilter;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.impl.MultiRuptureFractCoulombPositiveFilter;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.impl.MultiRuptureNetCoulombPositiveFilter;
+import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.impl.MultiRuptureSelfStiffnessFilter;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.PlausibilityResult;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.impl.coulomb.ParentCoulombCompatibilityFilter.Directionality;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.RupCartoonGenerator;
@@ -62,10 +63,6 @@ public class RuptureMerger {
         return null;
     }
 
-    ConcurrentCounter selfStiffnessStatsCru = new ConcurrentCounter();
-    ConcurrentCounter selfStiffnessStatsSub = new ConcurrentCounter();
-    ConcurrentCounter selfStiffnessStatsBoth = new ConcurrentCounter();
-
     /**
      * Create new ruptures that combine the nucleation rupture and any of the target ruptures if they
      * are compatible.
@@ -82,20 +79,6 @@ public class RuptureMerger {
         for (ClusterRupture target : targets) {
             MultiRuptureJump jump = makeJump(nucleation, target);
             if (jump != null) {
-                double[] stats = ((MultiRuptureCoulombFilter)compatibilityFilters.get(1)).statsData(jump);
-                if(stats[0]>0) {
-                    selfStiffnessStatsSub.inc();
-                }
-                if(stats[1]>0) {
-                    selfStiffnessStatsCru.inc();
-                }
-                if(stats[0]>0 && stats[1]>0) {
-                    selfStiffnessStatsBoth.inc();
-                }
-//                if(stats[2]>0) {
-//                    selfAll++;
-//                }
-
                 PlausibilityResult compatibility = PlausibilityResult.PASS;
                 for (MultiRuptureCompatibilityFilter filter : compatibilityFilters) {
                     compatibility = compatibility.logicalAnd(filter.apply(jump, VERBOSE));
@@ -193,22 +176,27 @@ public class RuptureMerger {
         // will be used to quickly cache all interactions
         MultiRuptureCoulombFilter firstCoulombFilter = null;
 
-        // what fraction of interactions should be positive? this number will take some tuning
-        float fractThreshold = 0.75f;
-        outPrefix += "_cff" + oDF.format(fractThreshold) + "IntsPos";
-        MultiRuptureFractCoulombPositiveFilter fractCoulombFilter = new MultiRuptureFractCoulombPositiveFilter(stiffness.stiffnessCalc, fractThreshold, Directionality.BOTH);
-        if (firstCoulombFilter == null)
-            firstCoulombFilter = fractCoulombFilter;
-        merger.addFilter(fractCoulombFilter);
+//        // what fraction of interactions should be positive? this number will take some tuning
+//        float fractThreshold = 0.75f;
+//        outPrefix += "_cff" + oDF.format(fractThreshold) + "IntsPos";
+//        MultiRuptureFractCoulombPositiveFilter fractCoulombFilter = new MultiRuptureFractCoulombPositiveFilter(stiffness.stiffnessCalc, fractThreshold, Directionality.BOTH);
+//        if (firstCoulombFilter == null)
+//            firstCoulombFilter = fractCoulombFilter;
+//        merger.addFilter(fractCoulombFilter);
+//
+//        // force the net coulomb from one rupture to the other to positive; this more heavily weights nearby interactions
+//        Directionality netDirectionality = Directionality.BOTH; // require it to be positive to from subduction to crustal AND from crustal to subduction
+////     	Directionality netDirectionality = Directionality.EITHER; // require it to be positive to from subduction to crustal OR from crustal to subduction
+//        outPrefix += "_cffNetPositive" + netDirectionality;
+//        MultiRuptureNetCoulombPositiveFilter netCoulombFilter = new MultiRuptureNetCoulombPositiveFilter(stiffness.stiffnessCalc, netDirectionality);
+//        if (firstCoulombFilter == null)
+//            firstCoulombFilter = netCoulombFilter;
+//        merger.addFilter(netCoulombFilter);
 
-        // force the net coulomb from one rupture to the other to positive; this more heavily weights nearby interactions
-        Directionality netDirectionality = Directionality.BOTH; // require it to be positive to from subduction to crustal AND from crustal to subduction
-//     	Directionality netDirectionality = Directionality.EITHER; // require it to be positive to from subduction to crustal OR from crustal to subduction
-        outPrefix += "_cffNetPositive" + netDirectionality;
-        MultiRuptureNetCoulombPositiveFilter netCoulombFilter = new MultiRuptureNetCoulombPositiveFilter(stiffness.stiffnessCalc, netDirectionality);
-        if (firstCoulombFilter == null)
-            firstCoulombFilter = netCoulombFilter;
-        merger.addFilter(netCoulombFilter);
+        double selfStiffnessThreshold = 0;
+        outPrefix += "_cff" + oDF.format(selfStiffnessThreshold) + "SelfStiffness";
+        MultiRuptureSelfStiffnessFilter selfStiffnessFilter = new MultiRuptureSelfStiffnessFilter(stiffness.stiffnessCalc);
+        merger.addFilter(selfStiffnessFilter);
 
 
 
@@ -226,8 +214,6 @@ public class RuptureMerger {
         // full calculation
      	merger.setVerbose(false); // otherwise too much stdout
         List<ClusterRupture> mergedRuptures = merger.merge(nucleationRuptures, targetRuptures);
-
-        System.out.println("self stiffness > 0:: all->sub: "+merger.selfStiffnessStatsSub.get()+" all->cru: "+merger.selfStiffnessStatsCru.get() + " both: " + merger.selfStiffnessStatsBoth.get() );
 
 //        List<ClusterRupture> shortList = nucleationRuptures.stream()
 //                .filter(rupture -> rupture.clusters[0].subSects.get(0).getFaultTrace().first().lat > -42 &&
