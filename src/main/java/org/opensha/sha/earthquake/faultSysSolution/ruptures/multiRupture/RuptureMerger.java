@@ -3,10 +3,7 @@ package org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture;
 import org.opensha.sha.earthquake.faultSysSolution.FaultSystemRupSet;
 import org.opensha.sha.earthquake.faultSysSolution.modules.ClusterRuptures;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.ClusterRupture;
-import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.impl.MultiRuptureCoulombFilter;
-import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.impl.MultiRuptureFractCoulombPositiveFilter;
-import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.impl.MultiRuptureNetCoulombPositiveFilter;
-import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.impl.MultiRuptureSelfStiffnessFilter;
+import org.opensha.sha.earthquake.faultSysSolution.ruptures.multiRupture.impl.*;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.PlausibilityResult;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.plausibility.impl.coulomb.ParentCoulombCompatibilityFilter.Directionality;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.RupCartoonGenerator;
@@ -196,9 +193,10 @@ public class RuptureMerger {
         double selfStiffnessThreshold = 0;
         outPrefix += "_cff" + oDF.format(selfStiffnessThreshold) + "SelfStiffness";
         MultiRuptureSelfStiffnessFilter selfStiffnessFilter = new MultiRuptureSelfStiffnessFilter(stiffness.stiffnessCalc);
-        merger.addFilter(selfStiffnessFilter);
+    //    merger.addFilter(selfStiffnessFilter);
 
-
+        MultiRuptureSelfStiffnessFractionAreaFilter areaFilter = new MultiRuptureSelfStiffnessFractionAreaFilter(stiffness.stiffnessCalc, 0.9, rupSet.getFaultSectionDataList());
+        merger.addFilter(areaFilter);
 
         // run RuptureMerger for one nucleation rupture for now
 //     	int fromID = 97653;
