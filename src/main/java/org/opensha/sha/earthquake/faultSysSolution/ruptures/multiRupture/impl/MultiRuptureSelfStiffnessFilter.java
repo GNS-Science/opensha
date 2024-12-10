@@ -34,6 +34,9 @@ public class MultiRuptureSelfStiffnessFilter implements MultiRuptureCompatibilit
     }
 
     public PlausibilityResult apply(List<FaultSection> subduction, List<FaultSection> crustal) {
+        if(crustal.stream().mapToDouble(s->s.getArea(false)).sum() < 100000000) {
+            return PlausibilityResult.FAIL_HARD_STOP;
+        }
         List<FaultSection> all = new ArrayList<>();
         all.addAll(subduction);
         all.addAll(crustal);

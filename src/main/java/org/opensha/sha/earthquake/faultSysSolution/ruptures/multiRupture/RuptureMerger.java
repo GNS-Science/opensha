@@ -21,6 +21,8 @@ import java.util.stream.Collectors;
 
 public class RuptureMerger {
 
+    static DecimalFormat oDF = new DecimalFormat("0.##");
+
     boolean VERBOSE = true;
     List<MultiRuptureCompatibilityFilter> compatibilityFilters = new ArrayList<>();
     final SectionDistanceAzimuthCalculator disAzCalc;
@@ -41,6 +43,23 @@ public class RuptureMerger {
 
     transient int mergeCounter = 0;
 
+    protected double getDistance(ClusterRupture nucleation, ClusterRupture target) {
+        double result = Double.MAX_VALUE;
+
+        for (FaultSection targetSection : target.buildOrderedSectionList()) {
+            for (FaultSection nucleationSection : nucleation.clusters[0].subSects) {
+                double distance = disAzCalc.getDistance(targetSection, nucleationSection);
+                if (distance <= maxJumpDist) {
+                    return distance;
+                }
+                if (distance < result) {
+                    result = distance;
+                }
+            }
+        }
+        return result;
+    }
+
     /**
      * Creates a jump between the two ruptures if at least two fault sections are within maxJumpDist.
      * Does not guarantee to create the shortest jump.
@@ -49,16 +68,14 @@ public class RuptureMerger {
      * @return
      */
     protected MultiRuptureJump makeJump(ClusterRupture nucleation, ClusterRupture target) {
-        for (FaultSection targetSection : target.buildOrderedSectionList()) {
-            for (FaultSection nucleationSection : nucleation.clusters[0].subSects) {
-                double distance = disAzCalc.getDistance(targetSection, nucleationSection);
-                if (distance <= maxJumpDist) {
-                    return new MultiRuptureJump(nucleation.clusters[0].startSect, nucleation, target.clusters[0].startSect, target, distance);
-                }
-            }
+        double distance = getDistance(nucleation, target);
+        if (distance <= maxJumpDist) {
+            return new MultiRuptureJump(nucleation.clusters[0].startSect, nucleation, target.clusters[0].startSect, target, distance);
         }
         return null;
     }
+
+
 
     /**
      * Create new ruptures that combine the nucleation rupture and any of the target ruptures if they
@@ -116,6 +133,62 @@ public class RuptureMerger {
         return null;
     }
 
+    public int countNearRuptures(List<ClusterRupture> nucleation, List<ClusterRupture> target, String faultName) {
+        return nucleation.stream()
+                .filter(r -> r.clusters[0].startSect.getSectionName().contains(faultName))
+                .parallel()
+                .mapToInt(
+                        r -> (int) (target.parallelStream()
+                                .filter(cr -> cr.buildOrderedSectionList().stream().mapToDouble(s -> s.getArea(false)).sum() >= 100000000)
+                                .filter(cr -> getDistance(r, cr) <= maxJumpDist)
+                                .count())
+                )
+                .sum();
+    }
+
+    public void countPossibleCombinations(List<ClusterRupture> subduction, List<ClusterRupture> crustal){
+        System.out.println("Counting possible combinations");
+        int hiku = countNearRuptures(subduction, crustal, "Hikurangi");
+        int puy = countNearRuptures(subduction, crustal, "Puysegur");
+
+        System.out.println("Possible Hikurangi jumps: " + hiku);
+        System.out.println("Possible Puysegur jumps: " + puy);
+
+        System.out.println("Total: " + (hiku + puy));
+
+    }
+
+    public static boolean isSubduction(ClusterRupture rupture) {
+        return rupture.clusters[0].startSect.getSectionName().contains("row:");
+    }
+
+    public String setUpKevinsFilters(RuptureMerger merger, StiffnessCalcModule stiffness) {
+        // what fraction of interactions should be positive? this number will take some tuning
+        float fractThreshold = 0.75f;
+        String outPrefix = "_cff" + oDF.format(fractThreshold) + "IntsPos";
+        MultiRuptureFractCoulombPositiveFilter fractCoulombFilter = new MultiRuptureFractCoulombPositiveFilter(stiffness.stiffnessCalc, fractThreshold, Directionality.BOTH);
+        merger.addFilter(fractCoulombFilter);
+
+        // force the net coulomb from one rupture to the other to positive; this more heavily weights nearby interactions
+        Directionality netDirectionality = Directionality.BOTH; // require it to be positive to from subduction to crustal AND from crustal to subduction
+//     	Directionality netDirectionality = Directionality.EITHER; // require it to be positive to from subduction to crustal OR from crustal to subduction
+        outPrefix += "_cffNetPositive" + netDirectionality;
+        MultiRuptureNetCoulombPositiveFilter netCoulombFilter = new MultiRuptureNetCoulombPositiveFilter(stiffness.stiffnessCalc, netDirectionality);
+        merger.addFilter(netCoulombFilter);
+
+        return outPrefix;
+    }
+
+    public String setUpBrucesFilters(RuptureMerger merger, StiffnessCalcModule stiffness) {
+
+        double selfStiffnessThreshold = 0;
+        String outPrefix = "_cff" + oDF.format(selfStiffnessThreshold) + "SelfStiffness";
+        MultiRuptureSelfStiffnessFilter selfStiffnessFilter = new MultiRuptureSelfStiffnessFilter(stiffness.stiffnessCalc);
+        merger.addFilter(selfStiffnessFilter);
+
+        return outPrefix;
+    }
+
     public static void main(String[] args) throws IOException {
 
         // load ruptures and split them up into crustal and subduction
@@ -148,7 +221,7 @@ public class RuptureMerger {
         }
 
         for (ClusterRupture rupture : ruptures) {
-            if (rupture.clusters[0].subSects.get(0).getSectionName().contains("row:")) {
+            if (isSubduction(rupture)) {
                 nucleationRuptures.add(rupture);
             } else {
                 targetRuptures.add(rupture);
@@ -158,45 +231,24 @@ public class RuptureMerger {
         System.out.println("Loaded " + nucleationRuptures.size() + " nucleation ruptures");
         System.out.println("Loaded " + targetRuptures.size() + " target ruptures");
         
-        DecimalFormat oDF = new DecimalFormat("0.##");
-
         // set up RuptureMerger
-        double maxJumpDist = 5d;
+        double maxJumpDist = 15d;
         String outPrefix = "mergedRupset_"+oDF.format(maxJumpDist)+"km";
-        RuptureMerger merger = new RuptureMerger(rupSet, 5);
+        RuptureMerger merger = new RuptureMerger(rupSet, maxJumpDist);
+
+        merger.countPossibleCombinations(nucleationRuptures, targetRuptures);
 
         StiffnessCalcModule stiffness = new StiffnessCalcModule(rupSet, 2, new File("C:\\tmp\\stiffnessCaches"));
 
         if (stiffness.stiffGridSpacing != 1d)
             outPrefix += "_cffPatch" + oDF.format(stiffness.stiffGridSpacing) + "km";
 
-        // will be used to quickly cache all interactions
-        MultiRuptureCoulombFilter firstCoulombFilter = null;
+        // outPrefix += merger.setUpKevinsFilters(merger, stiffness);
 
-//        // what fraction of interactions should be positive? this number will take some tuning
-//        float fractThreshold = 0.75f;
-//        outPrefix += "_cff" + oDF.format(fractThreshold) + "IntsPos";
-//        MultiRuptureFractCoulombPositiveFilter fractCoulombFilter = new MultiRuptureFractCoulombPositiveFilter(stiffness.stiffnessCalc, fractThreshold, Directionality.BOTH);
-//        if (firstCoulombFilter == null)
-//            firstCoulombFilter = fractCoulombFilter;
-//        merger.addFilter(fractCoulombFilter);
-//
-//        // force the net coulomb from one rupture to the other to positive; this more heavily weights nearby interactions
-//        Directionality netDirectionality = Directionality.BOTH; // require it to be positive to from subduction to crustal AND from crustal to subduction
-////     	Directionality netDirectionality = Directionality.EITHER; // require it to be positive to from subduction to crustal OR from crustal to subduction
-//        outPrefix += "_cffNetPositive" + netDirectionality;
-//        MultiRuptureNetCoulombPositiveFilter netCoulombFilter = new MultiRuptureNetCoulombPositiveFilter(stiffness.stiffnessCalc, netDirectionality);
-//        if (firstCoulombFilter == null)
-//            firstCoulombFilter = netCoulombFilter;
-//        merger.addFilter(netCoulombFilter);
+        outPrefix += merger.setUpBrucesFilters(merger, stiffness);
 
-        double selfStiffnessThreshold = 0;
-        outPrefix += "_cff" + oDF.format(selfStiffnessThreshold) + "SelfStiffness";
-        MultiRuptureSelfStiffnessFilter selfStiffnessFilter = new MultiRuptureSelfStiffnessFilter(stiffness.stiffnessCalc);
-    //    merger.addFilter(selfStiffnessFilter);
-
-        MultiRuptureSelfStiffnessFractionAreaFilter areaFilter = new MultiRuptureSelfStiffnessFractionAreaFilter(stiffness.stiffnessCalc, 0.9, rupSet.getFaultSectionDataList());
-        merger.addFilter(areaFilter);
+//        MultiRuptureSelfStiffnessFractionAreaFilter areaFilter = new MultiRuptureSelfStiffnessFractionAreaFilter(stiffness.stiffnessCalc, 0.9, rupSet.getFaultSectionDataList());
+//        merger.addFilter(areaFilter);
 
         // run RuptureMerger for one nucleation rupture for now
 //     	int fromID = 97653;
@@ -208,7 +260,7 @@ public class RuptureMerger {
 //        stiffnessCacheSize = checkUpdateStiffnessCache(stiffnessCacheFile, stiffnessCacheSize, stiffnessCache);
 //        
 //        List<ClusterRupture> mergedRuptures = merger.merge(testNucleation, targetRuptures);
-        
+
         // full calculation
      	merger.setVerbose(false); // otherwise too much stdout
         List<ClusterRupture> mergedRuptures = merger.merge(nucleationRuptures, targetRuptures);
