@@ -39,16 +39,27 @@ public class GitVersion {
     }
 
     public static List<String> execute(String[] command, File directory) {
+        // A missing working directory is reported by the JVM as "Cannot run program ... error=2,
+        // No such file or directory" — indistinguishable from a missing git binary, and alarming
+        // in a log. Check first so an absent source tree (the normal case in a deployed
+        // container, which carries the jar but no checkout) is one quiet line instead.
+        if (directory != null && !directory.isDirectory()) {
+            System.err.println("Skipping " + String.join(" ", command)
+                    + " : not a directory: " + directory);
+            return null;
+        }
         try {
             Process p = Runtime.getRuntime().exec(command, null, directory);
             int exit = p.waitFor();
             if (exit != 0) {
+                System.err.println("Command " + String.join(" ", command)
+                        + " exited " + exit + " in " + directory);
                 return null;
             }
             return FileUtils.loadStream(p.getInputStream());
         } catch (Exception e) {
-            System.err.println("Exception executing command " + String.join(" ", command) + " : " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("Could not execute " + String.join(" ", command)
+                    + " in " + directory + " : " + e.getMessage());
             return null;
         }
     }
@@ -85,9 +96,11 @@ public class GitVersion {
             System.out.println(gitBranchFileName + " resource not found.");
         }
 
-        File cwd = new File("").getAbsoluteFile();
+        // Must run against baseDirectory, like loadGitHash and loadGitRemote. This used to use
+        // the process cwd, which meant the branch of whatever repository happened to launch the
+        // JVM got reported as this repository's branch — wrong data rather than absent data.
         String[] command = {"git", "rev-parse", "--abbrev-ref", "HEAD"};
-        return first(execute(command, cwd));
+        return first(execute(command, baseDirectory));
     }
 
     public String loadGitRemote() throws IOException {
@@ -104,11 +117,11 @@ public class GitVersion {
             System.out.println(gitBranchFileName + " resource not found.");
         }
 
-        String[] command = {"git", "name-rev", "--name-only", "HEAD"};
-        String branch = first(execute(command, baseDirectory));
-        command = new String[]{"git", "config", "branch." + branch + ".remote"};
-        String remote = first(execute(command, baseDirectory));
-        command = new String[]{"git", "config", "remote." + remote + ".url"};
+        // Asks origin directly, matching build-git.gradle. The previous chain walked
+        // name-rev -> branch.<name>.remote -> remote.<name>.url, which yields nothing whenever
+        // HEAD sits on a tag: name-rev returns "tags/...", which is not a branch, so the middle
+        // lookup fails and the last command becomes the literal `git config remote.null.url`.
+        String[] command = {"git", "remote", "get-url", "origin"};
         return first(execute(command, baseDirectory));
     }
 

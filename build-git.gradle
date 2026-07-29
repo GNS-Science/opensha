@@ -1,85 +1,95 @@
-ext.getGitHash = { ->
+// Build-time git provenance, embedded into the jar as build.githash / .gitbranch /
+// .gitremoteurl / .date resources and read back at runtime by
+// org.opensha.commons.util.GitVersion.
+//
+// These resources are the *only* provenance mechanism that works in a deployed
+// container, which carries the jar but no git checkout. If they go missing, GitVersion
+// falls back to shelling out to git against a source tree that may not exist. Keep the
+// warnings below loud: a silent failure here previously shipped metadata-less jars for
+// two months (Project.exec was removed in Gradle 9, every call threw, and every throw
+// was swallowed).
+
+/**
+ * Runs a git command in projectDir and returns its trimmed stdout, or "" on any failure.
+ *
+ * Uses ProcessBuilder rather than Gradle's exec/ExecOperations: writeBuildFiles runs at
+ * execution time so there is nothing to gain from a lazy provider, and ProcessBuilder is
+ * not subject to Gradle API churn. stderr is captured separately rather than merged, so
+ * an advisory git warning cannot end up inside a commit hash.
+ */
+ext.gitOutput = { List<String> cmd ->
     try {
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'rev-parse', '--short', 'HEAD'
-            standardOutput = stdout
+        def proc = new ProcessBuilder(cmd).directory(projectDir).start()
+        // Output here is a hash, a branch name or a URL — far below the pipe buffer, so
+        // draining the streams in sequence cannot deadlock.
+        def out = proc.inputStream.getText('UTF-8').trim()
+        def err = proc.errorStream.getText('UTF-8').trim()
+        if (proc.waitFor() != 0) {
+            logger.warn("git ${cmd.join(' ')} failed in ${projectDir}: ${err}")
+            return ""
         }
-        return stdout.toString().trim()
+        return out
     } catch (Exception e) {
+        logger.warn("could not run git ${cmd.join(' ')} in ${projectDir}: ${e.message}")
         return ""
     }
+}
+
+ext.getGitHash = { ->
+    gitOutput(['git', 'rev-parse', '--short', 'HEAD'])
 }
 
 ext.getGitLongHash = { ->
-    try {
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'rev-parse', 'HEAD'
-            standardOutput = stdout
-        }
-        return stdout.toString().trim()
-    } catch (Exception e) {
-        return ""
-    }
+    gitOutput(['git', 'rev-parse', 'HEAD'])
 }
 
 ext.getGitBranch = { ->
-    try {
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'rev-parse', '--abbrev-ref', 'HEAD'
-            standardOutput = stdout
-        }
-        return stdout.toString().trim()
-    } catch (Exception e) {
-        return ""
+    def branch = gitOutput(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
+    if (branch == 'HEAD') {
+        // Detached HEAD — how actions/checkout leaves a clone pinned to a ref, and how
+        // the release build runs. Deliberately NOT GITHUB_REF_NAME: in the nzshm-opensha
+        // build that variable names *that* repo's ref, so using it here would stamp the
+        // wrong repository's identity into this repository's provenance.
+        branch = gitOutput(['git', 'name-rev', '--name-only', '--always', 'HEAD'])
+                .replaceFirst(/^remotes\/origin\//, '')
     }
+    return branch
 }
 
 ext.getGitRemoteUrl = { ->
-    try {
-        def stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'name-rev', '--name-only', 'HEAD'
-            standardOutput = stdout
-        }
-        def branch = stdout.toString().trim()
-
-        stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'config', 'branch.' + branch + '.remote'
-            standardOutput = stdout
-        }
-        def remote = stdout.toString().trim()
-
-        stdout = new ByteArrayOutputStream()
-        exec {
-            commandLine 'git', 'config', 'remote.' + remote + '.url'
-            standardOutput = stdout
-        }
-        return stdout.toString().trim()
-    } catch (Exception e) {
-        return ""
-    }
+    // Asks origin directly. The old implementation walked
+    // name-rev -> branch.<name>.remote -> remote.<name>.url, which yields nothing
+    // whenever HEAD sits on a tag (name-rev returns "tags/...", which is not a branch,
+    // so the lookup collapses to the literal `git config remote.null.url`).
+    gitOutput(['git', 'remote', 'get-url', 'origin'])
 }
 
 ext.writeBuildFiles = { prefix='build' ->
-    logger.info("Writing build.date file")
+    logger.info("Writing ${prefix}.date file")
     new File(projectDir, prefix+".date").text = new Date().toString()+"\n"+System.currentTimeMillis()+"\n"
+
     String hash = getGitLongHash()
     if (hash?.trim()) {
-        logger.info("Writing build.githash file: "+hash)
+        logger.info("Writing ${prefix}.githash file: "+hash)
         new File(projectDir, prefix+".githash").text = hash+"\n"
+    } else {
+        logger.warn("${prefix}.githash NOT written - git hash unavailable in ${projectDir}; "
+                + "the jar will carry no commit provenance")
     }
+
     String branch = getGitBranch()
     if (branch?.trim()) {
-        logger.info("Writing build.gitbranch file: "+branch)
+        logger.info("Writing ${prefix}.gitbranch file: "+branch)
         new File(projectDir, prefix+".gitbranch").text = branch+"\n"
+    } else {
+        logger.warn("${prefix}.gitbranch NOT written - git branch unavailable in ${projectDir}")
     }
+
     String remoteUrl = getGitRemoteUrl()
     if (remoteUrl?.trim()) {
-        logger.info("Writing build.gitremoteurl file: "+remoteUrl)
+        logger.info("Writing ${prefix}.gitremoteurl file: "+remoteUrl)
         new File(projectDir, prefix+".gitremoteurl").text = remoteUrl+"\n"
+    } else {
+        logger.warn("${prefix}.gitremoteurl NOT written - git remote unavailable in ${projectDir}")
     }
 }
