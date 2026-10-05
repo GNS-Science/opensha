@@ -14,8 +14,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.FaultSubsectionCluster.JumpStub;
 import org.opensha.sha.earthquake.faultSysSolution.ruptures.strategies.ClusterConnectionStrategy;
@@ -333,6 +335,67 @@ public class ClusterRupture {
 		
 		return new ClusterRupture(clusterList.toArray(new FaultSubsectionCluster[0]), jumpsBuilder.build(),
 				ImmutableMap.of(), unique, internalUnique, singleStrand);
+	}
+
+	/**
+	 * Builds a copy of this rupture (including all splays) where each {@link FaultSection} has been replaced
+	 * by the section returned by the given mapper. This is useful when sections have been re-indexed, e.g., for
+	 * a rupture set subset. Clusters, jumps, and unique rupture IDs are all rebuilt with the mapped sections.
+	 *
+	 * @param sectMapper function mapping each section in this rupture to its replacement
+	 * @return remapped copy of this rupture
+	 */
+	public ClusterRupture remapSections(Function<FaultSection, FaultSection> sectMapper) {
+		Map<FaultSubsectionCluster, FaultSubsectionCluster> clusterMap = new IdentityHashMap<>();
+		FaultSubsectionCluster[] newClusters = new FaultSubsectionCluster[clusters.length];
+		for (int i=0; i<clusters.length; i++) {
+			FaultSubsectionCluster cluster = clusters[i];
+			List<FaultSection> newSubSects = new ArrayList<>(cluster.subSects.size());
+			for (FaultSection sect : cluster.subSects)
+				newSubSects.add(sectMapper.apply(sect));
+			List<FaultSection> newEndSects = new ArrayList<>(cluster.endSects.size());
+			for (FaultSection sect : cluster.endSects)
+				newEndSects.add(sectMapper.apply(sect));
+			newClusters[i] = new FaultSubsectionCluster(newSubSects, sectMapper.apply(cluster.startSect), newEndSects);
+			clusterMap.put(cluster, newClusters[i]);
+		}
+
+		// remap splays first so that their starting clusters are available for the splay jumps
+		Map<Jump, ClusterRupture> newSplaysByOrigJump = new IdentityHashMap<>();
+		for (Jump splayJump : splays.keySet()) {
+			ClusterRupture splay = splays.get(splayJump);
+			ClusterRupture newSplay = splay.remapSections(sectMapper);
+			clusterMap.put(splay.clusters[0], newSplay.clusters[0]);
+			newSplaysByOrigJump.put(splayJump, newSplay);
+		}
+
+		ImmutableList.Builder<Jump> internalJumpsBuilder = ImmutableList.builderWithExpectedSize(internalJumps.size());
+		for (Jump jump : internalJumps)
+			internalJumpsBuilder.add(remapJump(jump, sectMapper, clusterMap));
+
+		UniqueRupture newInternalUnique = UniqueRupture.forClusters(newClusters);
+		UniqueRupture newUnique = newInternalUnique;
+		ImmutableMap.Builder<Jump, ClusterRupture> splayBuilder = ImmutableMap.builderWithExpectedSize(splays.size());
+		for (Jump splayJump : splays.keySet()) {
+			ClusterRupture newSplay = newSplaysByOrigJump.get(splayJump);
+			splayBuilder.put(remapJump(splayJump, sectMapper, clusterMap), newSplay);
+			newUnique = UniqueRupture.add(newUnique, newSplay.unique);
+		}
+
+		return new ClusterRupture(newClusters, internalJumpsBuilder.build(), splayBuilder.build(),
+				newUnique, newInternalUnique, singleStrand);
+	}
+
+	private static Jump remapJump(Jump jump, Function<FaultSection, FaultSection> sectMapper,
+			Map<FaultSubsectionCluster, FaultSubsectionCluster> clusterMap) {
+		FaultSubsectionCluster fromCluster = clusterMap.get(jump.fromCluster);
+		FaultSubsectionCluster toCluster = clusterMap.get(jump.toCluster);
+		Preconditions.checkNotNull(fromCluster, "Jump fromCluster not found in rupture: %s", jump);
+		Preconditions.checkNotNull(toCluster, "Jump toCluster not found in rupture: %s", jump);
+		Jump newJump = new Jump(sectMapper.apply(jump.fromSection), fromCluster,
+				sectMapper.apply(jump.toSection), toCluster, jump.distance);
+		fromCluster.addConnection(newJump);
+		return newJump;
 	}
 
 	/**

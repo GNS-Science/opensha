@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -460,14 +461,20 @@ SplittableRuptureModule<ClusterRuptures> {
 
 		@Override
 		public ClusterRuptures getForRuptureSubSet(FaultSystemRupSet rupSubSet, RuptureSubSetMappings mappings) {
-			throw new UnsupportedOperationException("Not yet supported");
-//			List<ClusterRupture> subSet = new ArrayList<>();
-//			for (int r=0; r<mappings.getNumRetainedRuptures(); r++) {
-//				ClusterRupture origRup = clusterRuptures.get(mappings.getOrigRupID(r));
-//				
-//				
-//			}
-//			return subSet;
+			List<? extends FaultSection> origSects = rupSet.getFaultSectionDataList();
+			List<? extends FaultSection> newSects = rupSubSet.getFaultSectionDataList();
+			// sections are unchanged if this is a pure rupture subset, in which case ruptures can be reused as-is
+			boolean sectsIdentical = newSects.size() == origSects.size();
+			for (int s=0; sectsIdentical && s<newSects.size(); s++)
+				sectsIdentical = newSects.get(s) == origSects.get(mappings.getOrigSectID(s));
+			Function<FaultSection, FaultSection> sectMapper = sectsIdentical ? null :
+				sect -> newSects.get(mappings.getNewSectID(sect.getSectionId()));
+			List<ClusterRupture> subSet = new ArrayList<>(mappings.getNumRetainedRuptures());
+			for (int r=0; r<mappings.getNumRetainedRuptures(); r++) {
+				ClusterRupture origRup = clusterRuptures.get(mappings.getOrigRupID(r));
+				subSet.add(sectMapper == null ? origRup : origRup.remapSections(sectMapper));
+			}
+			return new Precomputed(rupSubSet, subSet);
 		}
 
 		@Override

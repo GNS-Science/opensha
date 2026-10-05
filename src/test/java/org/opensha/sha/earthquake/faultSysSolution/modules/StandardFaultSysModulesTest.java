@@ -44,6 +44,8 @@ import org.opensha.sha.earthquake.faultSysSolution.RupSetSaveLoadTests;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.constraints.ConstraintWeightingType;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.constraints.impl.UncertainDataConstraint.SectMappedUncertainDataConstraint;
 import org.opensha.sha.earthquake.faultSysSolution.inversion.sa.ConstraintRange;
+import org.opensha.sha.earthquake.faultSysSolution.ruptures.ClusterRupture;
+import org.opensha.sha.earthquake.faultSysSolution.ruptures.util.ConnectivityCluster;
 import org.opensha.sha.faultSurface.FaultSection;
 import org.opensha.sha.magdist.GutenbergRichterMagFreqDist;
 import org.opensha.sha.magdist.IncrementalMagFreqDist;
@@ -99,6 +101,63 @@ public class StandardFaultSysModulesTest {
 		ClusterRuptures origRups = demoRupSet.getModule(ClusterRuptures.class);
 		ClusterRuptures serMod = ClusterRuptures.instance(demoRupSet, origRups.getAll(), true);
 		testModuleSerialization(demoRupSet.getArchive(), demoRupSet, serMod, ClusterRuptures.class);
+	}
+
+	@Test
+	public void testClusterRupturesSubSets() throws IOException {
+		FaultSystemRupSet rupSet = FaultSystemRupSet.buildFromExisting(demoRupSet, false).build();
+		ClusterRuptures origRups = ClusterRuptures.instance(rupSet,
+				demoRupSet.requireModule(ClusterRuptures.class).getAll(), true);
+		rupSet.addModule(origRups);
+
+		// rupture subset: sections unchanged
+		List<Integer> retainedRups = new ArrayList<>();
+		for (int r=0; r<rupSet.getNumRuptures(); r+=2)
+			retainedRups.add(r);
+		FaultSystemRupSet rupSubSet = rupSet.getForRuptureSubSet(retainedRups);
+		checkClusterRupturesSubSet(rupSubSet, origRups);
+
+		// section subset: sections cloned and re-indexed. first exclude all ruptures on the parent of section 0 so
+		// that it's disconnected, then pick the connectivity cluster with the most ruptures that doesn't contain
+		// section 0, so that section IDs are actually shifted
+		int excludeParentID = rupSet.getFaultSectionData(0).getParentSectionId();
+		List<Integer> disconnectedRups = new ArrayList<>();
+		for (int r=0; r<rupSet.getNumRuptures(); r++)
+			if (!rupSet.getParentSectionsForRup(r).contains(excludeParentID))
+				disconnectedRups.add(r);
+		FaultSystemRupSet disconnectedRupSet = rupSet.getForRuptureSubSet(disconnectedRups);
+		ConnectivityCluster bestCluster = null;
+		for (ConnectivityCluster cluster : ConnectivityClusters.build(disconnectedRupSet))
+			if (!cluster.getSectIDs().contains(0) && (bestCluster == null
+					|| cluster.getNumRuptures() > bestCluster.getNumRuptures()))
+				bestCluster = cluster;
+		assertNotNull(bestCluster);
+		FaultSystemRupSet sectSubSet = disconnectedRupSet.getForSectionSubSet(bestCluster.getSectIDs());
+		assertTrue(sectSubSet.getNumRuptures() > 0);
+		checkClusterRupturesSubSet(sectSubSet, origRups);
+
+		ClusterRuptures subSetRups = sectSubSet.requireModule(ClusterRuptures.class);
+		testModuleSerialization(sectSubSet.getArchive(), sectSubSet, subSetRups, ClusterRuptures.class);
+	}
+
+	private static void checkClusterRupturesSubSet(FaultSystemRupSet subSet, ClusterRuptures origRups) {
+		ClusterRuptures subSetRups = subSet.requireModule(ClusterRuptures.class);
+		assertEquals(origRups.getClass(), subSetRups.getClass());
+		assertEquals(subSet.getNumRuptures(), subSetRups.size());
+		List<? extends FaultSection> sects = subSet.getFaultSectionDataList();
+		for (int r=0; r<subSet.getNumRuptures(); r++) {
+			ClusterRupture rup = subSetRups.get(r);
+			HashSet<Integer> expected = new HashSet<>(subSet.getSectionsIndicesForRup(r));
+			List<FaultSection> rupSects = rup.buildOrderedSectionList();
+			assertEquals(expected.size(), rup.getTotalNumSects());
+			assertEquals(expected.size(), rupSects.size());
+			for (FaultSection sect : rupSects) {
+				int id = sect.getSectionId();
+				assertTrue(expected.contains(id));
+				assertTrue("Rupture uses a section instance not from the subset", sect == sects.get(id));
+				assertTrue(rup.unique.contains(id));
+			}
+		}
 	}
 
 	@Test
